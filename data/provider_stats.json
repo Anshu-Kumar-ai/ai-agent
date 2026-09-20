@@ -1,0 +1,34 @@
+{
+  "gemini": {
+    "requests": 16,
+    "successes": 12,
+    "failures": 4,
+    "total_latency": 81.73997870000039,
+    "health_ema": 0.5478794157999899,
+    "latency_ema": 5.698882917762574
+  },
+  "groq": {
+    "requests": 16,
+    "successes": 14,
+    "failures": 2,
+    "total_latency": 122.68196149999494,
+    "health_ema": 0.9948794157999898,
+    "latency_ema": 18.272735293060528
+  },
+  "openrouter": {
+    "requests": 2,
+    "successes": 1,
+    "failures": 1,
+    "total_latency": 2.702676500000962,
+    "health_ema": 0.5449999999999999,
+    "latency_ema": 1.4866165500006898
+  },
+  "local": {
+    "requests": 2,
+    "successes": 2,
+    "failures": 0,
+    "total_latency": 41.63122839999687,
+    "health_ema": 0.7549999999999999,
+    "latency_ema": 25.545696919999045
+  }
+}
