@@ -293,7 +293,6 @@ class Evaluator:
         # Extract key information from tool results
         tool_facts = []
         for obs in observations:
-            tool_name = obs.get("tool_name", "")
             result = obs.get("result", {})
 
             if isinstance(result, dict):

@@ -183,13 +183,13 @@ class AgentLoop:
                             # Try to request approval via callback if available
                             approved = False
                             if self.permission_callback is not None:
-                                try:
-                                    approved = self.permission_callback(
-                                        plan.tool_name, reason, plan.arguments
-                                    )
-                                except BaseException:
-                                    # If callback fails, treat as not approved
-                                    approved = False
+                                                            try:
+                                                                approved = self.permission_callback(
+                                                                    plan.tool_name, reason, plan.arguments
+                                                                )
+                                                            except Exception:
+                                                                # If callback fails, treat as not approved
+                                                                approved = False
                             if approved:
                                 # Grant session permission for this specific invocation
                                 self.permission_manager.grant_permission(
