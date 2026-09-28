@@ -252,9 +252,10 @@ class Evaluator:
 
         # For web search: if response mentions CAPTCHA/temporarily unavailable,
         # this is a known limitation of free search APIs, not agent failure
-        if "temporarily unavailable" in response_lower and "captcha" in response_lower:
-            if any(w in user_request.lower() for w in ["search", "find", "look", "web"]):
-                return max(score, 0.85)
+        if "temporarily unavailable" in response_lower and "captcha" in response_lower and any(
+            w in user_request.lower() for w in ["search", "find", "look", "web"]
+        ):
+            return max(score, 0.85)
 
         # For write operations: if response contains bytes_written or success,
         # and request was for writing/creating, boost score
@@ -271,10 +272,10 @@ class Evaluator:
             and not response.strip().startswith("{")
             and not "status:" in response_lower
             and not "fetched:" in response_lower
-        ) and any(w in user_request.lower() for w in ["read", "show", "view", "display", "open", "cat"]):
-            # If it's a short text response (< 1000 chars), assume it's file content
-            if len(response) < 1000:
-                return max(score, 0.85)
+            and any(w in user_request.lower() for w in ["read", "show", "view", "display", "open", "cat"])
+            and len(response) < 1000
+        ):
+            return max(score, 0.85)
 
         # For move/rename operations: if response is True or contains success,
         # and request was for moving/renaming, boost score
