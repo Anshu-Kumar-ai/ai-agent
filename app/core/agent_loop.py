@@ -122,7 +122,7 @@ class AgentLoop:
                     status_code=None,
                     error_type=type(e).__name__,
                     retry_count=0,
-                    timestamp=datetime.datetime.now(),
+                    timestamp=datetime.datetime.now(datetime.timezone.utc),
                     recoverable=False,
                 )
                 self.provider_failures.append(pf)
@@ -187,8 +187,7 @@ class AgentLoop:
                                     approved = self.permission_callback(
                                         plan.tool_name, reason, plan.arguments
                                     )
-                                except Exception:
-                                    # If callback fails, treat as not approved
+                                except Exception:  # Broad catch intentional: callback failure = not approved
                                     approved = False
                             if approved:
                                 # Grant session permission for this specific invocation
