@@ -130,6 +130,7 @@ class AgentLoop:
 
             if plan.action == "respond":
                 response = responder(observations)
+                print(f"[Agent] Responder response: {response[:200]}...")
                 # Evaluate the response if an evaluator is provided.
                 if self.evaluator is not None:
                     evaluation = self.evaluator.evaluate(

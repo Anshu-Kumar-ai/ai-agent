@@ -246,27 +246,35 @@ class LLMPlanner:
         if context:
             context_section = f"\nCONTEXT:\n{context}\n"
 
-        return f"""You are a planning agent. Given a user request, available tools, and context, output a single JSON plan object.
+        # Extract tool names for clarity
+        tool_names = [tool["name"] for tool in available_tools if isinstance(tool, dict) and tool.get("name")]
+        tool_names_str = ", ".join(f"'{n}'" for n in tool_names)
 
-AVAILABLE TOOLS:
-{tools_json}{context_section}
-PLAN SCHEMA:
-{{
-  "action": "use_tool" | "respond",
-  "tool_name": string | null,
-  "arguments": object,
-  "reason": string
-}}
-
-RULES:
-1. "action" must be "use_tool" or "respond"
-2. If "action" is "use_tool", "tool_name" must be one of the available tool names
-3. "arguments" must be an object matching the tool's parameters schema
-4. If "action" is "respond", "tool_name" must be null and "arguments" must be {{}}
-5. Output ONLY the JSON object, no extra text
-
-USER REQUEST: {message}
-"""
+        return (
+            "You are a planning agent. Given a user request, available tools, and context, output a single JSON plan object.\n\n"
+            f"AVAILABLE TOOLS:\n{tools_json}{context_section}"
+            f"VALID TOOL NAMES: {tool_names_str}\n\n"
+            "PLAN SCHEMA:\n"
+            "{\n"
+            '  "action": "use_tool" | "respond",\n'
+            '  "tool_name": string | null,\n'
+            '  "arguments": object,\n'
+            '  "reason": string\n'
+            "}\n\n"
+            "RULES:\n"
+            '1. "action" must be "use_tool" or "respond"\n'
+            '2. If "action" is "use_tool", "tool_name" MUST be exactly one of the VALID TOOL NAMES above\n'
+            '3. "arguments" must be an object matching the tool\'s parameters schema\n'
+            '4. If "action" is "respond", "tool_name" must be null and "arguments" must be {}\n'
+            "5. Output ONLY the JSON object, no extra text\n\n"
+            "EXAMPLES:\n"
+            '- To calculate: {"action": "use_tool", "tool_name": "calculator", "arguments": {"expression": "2 + 3 * 4"}, "reason": "Evaluate arithmetic"}\n'
+            '- To read file: {"action": "use_tool", "tool_name": "fs.read", "arguments": {"path": "test.txt"}, "reason": "Read file content"}\n'
+            '- To write file: {"action": "use_tool", "tool_name": "fs.write", "arguments": {"path": "test.txt", "content": "hello"}, "reason": "Write file"}\n'
+            '- To list files: {"action": "use_tool", "tool_name": "fs.list", "arguments": {}, "reason": "List directory"}\n'
+            '- To respond: {"action": "respond", "tool_name": null, "arguments": {}, "reason": "Tool result available"}\n\n'
+            f"USER REQUEST: {message}"
+        )
 
     def _parse_llm_response(self, response: str) -> dict:
         """Parse and validate the LLM's JSON response."""

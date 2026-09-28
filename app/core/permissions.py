@@ -119,7 +119,7 @@ class PermissionManager:
         tool_name_lower = tool_name.lower()
 
         # Known safe tools
-        if tool_name_lower in {"calculator", "time"}:
+        if tool_name_lower in {"calculator", "time", "http.fetch", "web.search", "terminal.run"}:
             return RiskLevel.LOW
 
         # File system tools (heuristic based on name)

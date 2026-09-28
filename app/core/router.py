@@ -10,11 +10,11 @@ class SmartRouter:
         self.gateway = ModelGateway()
 
         self.priority_profiles = {
-            "general": ["gemini", "groq", "openrouter", "local"],
-            "coding": ["groq", "gemini", "openrouter", "local"],
-            "reasoning": ["gemini", "groq", "openrouter", "local"],
-            "creative": ["gemini", "openrouter", "groq", "local"],
-            "local": ["local", "gemini", "groq", "openrouter"],
+            "general": ["gemini", "groq", "openrouter"],
+            "coding": ["groq", "gemini", "openrouter"],
+            "reasoning": ["gemini", "groq", "openrouter"],
+            "creative": ["gemini", "openrouter", "groq"],
+            "local": ["local"],
         }
 
         self.keyword_profiles = {
@@ -308,8 +308,9 @@ class SmartRouter:
         if not model_message:
             raise ValueError("model_message cannot be empty")
 
-        profile = self._classify(message)
-        priority = self._select_priority(message)
+        # Classify based on the user's actual request, not the full prompt
+        profile = self._classify(model_message)
+        priority = self._select_priority(model_message)
 
         print(f"[Router] Task type: {profile}")
         print(

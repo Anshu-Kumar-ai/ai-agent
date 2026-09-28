@@ -1,6 +1,6 @@
 from typing import Optional, Callable
 from app.core.agent_loop import AgentLoop
-from app.core.planner import Planner
+from app.core.planner import LLMPlanner
 from app.core.router import SmartRouter
 from app.memory.enhanced import EnhancedMemory
 from app.tools.calculator import CalculatorTool
@@ -19,6 +19,8 @@ from app.tools.adapters import (
     FSListTool,
     TerminalRunTool,
 )
+# Import web tools
+from app.tools.web_tools import HTTPFetchTool, WebSearchTool
 
 
 class Agent:
@@ -37,7 +39,7 @@ class Agent:
         self.tool_registry.register(CalculatorTool())
         self.tool_registry.register(TimeTool())
         
-        # Register new filesystem tools
+        # Register filesystem tools
         self.tool_registry.register(FSReadTool())
         self.tool_registry.register(FSWriteTool())
         self.tool_registry.register(FSMoveTool())
@@ -46,10 +48,14 @@ class Agent:
         # Register terminal tool
         self.tool_registry.register(TerminalRunTool())
         
+        # Register web tools
+        self.tool_registry.register(HTTPFetchTool())
+        self.tool_registry.register(WebSearchTool())
+        
         # Create tool_executor
         self.tool_executor = ToolExecutor(self.tool_registry)
 
-        self.planner = Planner()
+        self.planner = LLMPlanner(self.router)
         self.evaluator = Evaluator()
         self.agent_loop = AgentLoop(
             self.planner,
@@ -114,7 +120,7 @@ class Agent:
 
         return self.router.ask(
             message,
-            model_message=context,
+            model_message=message,  # Pass user message, not full context
         )
 
     def get_memory(self) -> list[dict]:

@@ -68,16 +68,31 @@ class AgentEnhancedMemoryTests(unittest.TestCase):
         agent.run("What is 25 * 4 + 10?")
 
         # Check the context for the second request includes the observation and reflection
-        with patch.object(agent.router, "ask", return_value="The answer is 110.") as mock_ask:
-            agent.run("What was the previous answer?")
+        from app.core.planner import Plan
 
-            # Get the context passed to the router
-            call_args = mock_ask.call_args
-            context = call_args[1].get("model_message", "") if call_args[1] else call_args[0][1]
+        # Also mock evaluator to return high score to avoid retries
+        original_evaluator = agent.evaluator
+        from app.core.evaluation import Evaluation
+        
+        mock_evaluation = Evaluation(score=1.0, feedback="All criteria met.", criteria_met=["all"], criteria_not_met=[])
+        agent.evaluator.evaluate = lambda *args, **kwargs: mock_evaluation
+        
+        try:
+            with patch.object(agent.planner, "plan", side_effect=[
+                Plan(action="use_tool", tool_name="calculator", arguments={"expression": "25 * 4 + 10"}, reason="Calculate"),
+                Plan(action="respond", tool_name=None, arguments={}, reason="The answer is 110."),
+                Plan(action="respond", tool_name=None, arguments={}, reason="The answer is 110."),
+            ]) as mock_plan:
+                agent.run("What was the previous answer?")
 
-            self.assertIn("calculator", context)
-            self.assertIn("110", context)
-            self.assertIn("Tool observations", context)
+                # Get the context passed to the planner
+                call_args = mock_plan.call_args_list[1]  # Second call (first plan for second request)
+                context = call_args[1].get("context", "") if call_args[1] else call_args[0][3]
+                self.assertIn("calculator", context)
+                self.assertIn("110", context)
+                self.assertIn("Tool observations", context)
+        finally:
+            agent.evaluator = original_evaluator
 
 
 class AgentLoopWithReflectionTests(unittest.TestCase):

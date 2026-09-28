@@ -112,6 +112,8 @@ class FSMoveTool(BaseTool):
         "properties": {
             "src": {"type": "string", "description": "Source path"},
             "dst": {"type": "string", "description": "Destination path"},
+            "source": {"type": "string", "description": "Source path (alias for src)"},
+            "destination": {"type": "string", "description": "Destination path (alias for dst)"},
         },
         "required": ["src", "dst"]
     }
@@ -121,6 +123,14 @@ class FSMoveTool(BaseTool):
         self.pc_tool = PCMoveFileTool()
     
     def execute(self, **kwargs) -> Any:
+        # Handle both src/dst and source/destination parameter names
+        if "source" in kwargs and "src" not in kwargs:
+            kwargs = dict(kwargs)
+            kwargs["src"] = kwargs.pop("source")
+        if "destination" in kwargs and "dst" not in kwargs:
+            kwargs = dict(kwargs)
+            kwargs["dst"] = kwargs.pop("destination")
+        
         action = Action.create(
             tool_name=self.name,
             arguments=kwargs,
@@ -140,6 +150,14 @@ class FSMoveTool(BaseTool):
             raise RuntimeError(f"Tool failed with status: {result.status}")
     
     def validate_arguments(self, arguments: dict) -> None:
+        # Handle both src/dst and source/destination parameter names
+        if "source" in arguments and "src" not in arguments:
+            arguments = dict(arguments)
+            arguments["src"] = arguments.pop("source")
+        if "destination" in arguments and "dst" not in arguments:
+            arguments = dict(arguments)
+            arguments["dst"] = arguments.pop("destination")
+        
         valid, error = self.pc_tool.validate_arguments(arguments)
         if not valid:
             raise ValueError(error)
@@ -205,6 +223,7 @@ class TerminalRunTool(BaseTool):
         "type": "object",
         "properties": {
             "cmd": {"type": ["string", "array"], "description": "Command to run (string or list of args)"},
+            "command": {"type": ["string", "array"], "description": "Command to run (alias for cmd)"},
             "timeout": {"type": "number", "description": "Timeout in seconds", "default": 30},
         },
         "required": ["cmd"]
@@ -215,6 +234,11 @@ class TerminalRunTool(BaseTool):
         self.pc_tool = PCTerminalTool()
     
     def execute(self, **kwargs) -> Any:
+        # Handle both cmd and command parameter names
+        if "command" in kwargs and "cmd" not in kwargs:
+            kwargs = dict(kwargs)
+            kwargs["cmd"] = kwargs.pop("command")
+        
         action = Action.create(
             tool_name=self.name,
             arguments=kwargs,
@@ -234,6 +258,11 @@ class TerminalRunTool(BaseTool):
             raise RuntimeError(f"Tool failed with status: {result.status}")
     
     def validate_arguments(self, arguments: dict) -> None:
+        # Handle both cmd and command parameter names
+        if "command" in arguments and "cmd" not in arguments:
+            arguments = dict(arguments)
+            arguments["cmd"] = arguments.pop("command")
+        
         valid, error = self.pc_tool.validate_arguments(arguments)
         if not valid:
             raise ValueError(error)

@@ -2,9 +2,11 @@ import sys
 sys.path.insert(0, '.')
 
 from app.core.agent import Agent
+from app.core.permissions import ApprovalMode
 
-# Create agent
+# Create agent with permissive permission mode for testing
 agent = Agent()
+agent.permission_manager.approval_mode = ApprovalMode.FULL_AUTO
 
 print("=== Testing all tools ===")
 
@@ -21,7 +23,7 @@ result = agent.run("List files in current directory")
 print(f"List: {len(result)} items")
 
 # Test fs.write
-result = agent.run("Create a test file at test_output.txt with content 'Hello from agent!'")
+result = agent.run("Write 'Hello from agent!' to file test_output.txt")
 print(f"Write: {result}")
 
 # Test fs.read
@@ -39,5 +41,9 @@ print(f"Read moved: {result}")
 # Test terminal.run
 result = agent.run("Run command echo 'Hello from terminal'")
 print(f"Terminal: {result}")
+
+# Test http.fetch
+result = agent.run("Fetch https://httpbin.org/get")
+print(f"HTTP Fetch: {result[:100]}...")
 
 print("\n=== All tests passed! ===")

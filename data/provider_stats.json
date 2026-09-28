@@ -1,34 +1,34 @@
 {
   "gemini": {
-    "requests": 16,
-    "successes": 12,
-    "failures": 4,
-    "total_latency": 81.73997870000039,
-    "health_ema": 0.5478794157999899,
-    "latency_ema": 5.698882917762574
+    "requests": 26,
+    "successes": 19,
+    "failures": 7,
+    "total_latency": 144.99077240000315,
+    "health_ema": 0.3302287125400075,
+    "latency_ema": 4.393961178107286
   },
   "groq": {
-    "requests": 16,
-    "successes": 14,
-    "failures": 2,
-    "total_latency": 122.68196149999494,
-    "health_ema": 0.9948794157999898,
-    "latency_ema": 18.272735293060528
+    "requests": 27,
+    "successes": 23,
+    "failures": 4,
+    "total_latency": 244.86388569999326,
+    "health_ema": 0.8024777493192152,
+    "latency_ema": 4.3639512787818076
   },
   "openrouter": {
-    "requests": 2,
-    "successes": 1,
+    "requests": 5,
+    "successes": 4,
     "failures": 1,
-    "total_latency": 2.702676500000962,
-    "health_ema": 0.5449999999999999,
-    "latency_ema": 1.4866165500006898
+    "total_latency": 22.870184800005518,
+    "health_ema": 0.8439349999999999,
+    "latency_ema": 4.278153510751229
   },
   "local": {
-    "requests": 2,
-    "successes": 2,
+    "requests": 103,
+    "successes": 103,
     "failures": 0,
-    "total_latency": 41.63122839999687,
-    "health_ema": 0.7549999999999999,
-    "latency_ema": 25.545696919999045
+    "total_latency": 897.6674582999954,
+    "health_ema": 0.9999999999999996,
+    "latency_ema": 5.825977722786838
   }
 }
