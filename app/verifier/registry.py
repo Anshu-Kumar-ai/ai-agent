@@ -1,11 +1,11 @@
-from typing import Dict
 from uuid import UUID
+
 from .base import Verifier
-from ...core.state.goal_state import Goal
+
 
 class VerifierRegistry:
     """Registry mapping goal IDs to Verifier instances."""
-    _mapping: Dict[UUID, Verifier] = {}
+    _mapping: dict[UUID, Verifier] = {}
 
     @classmethod
     def register(cls, goal_id: UUID, verifier: Verifier) -> None:

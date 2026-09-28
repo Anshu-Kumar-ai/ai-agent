@@ -1,17 +1,13 @@
 import json
 import logging
-from typing import Optional, Tuple, Dict, Any
-from uuid import uuid4
 import time
 
-from ..base import ReflectionEngine
-from ....core.state.action import Action
+from ....core.state.agent_state import ConversationState, TaskGoalState
 from ....core.state.attempt import Attempt
-from ....core.state.agent_state import TaskGoalState, ConversationState
-from ....core.state.reflection import Reflection
 from ....core.state.next_action import NextAction, NextActionType
+from ....core.state.reflection import Reflection
 from ....modules.llm.routing import LLMRouter
-from ....modules.llm.provider import LLMProvider
+from ..base import ReflectionEngine
 from ..stub_reflector import StubReflector
 
 logger = logging.getLogger(__name__)
@@ -23,7 +19,7 @@ class LLMStructuredReflector(ReflectionEngine):
     Falls back to StubReflector on failure.
     """
 
-    def __init__(self, llm_router: LLMRouter, fallback: Optional[ReflectionEngine] = None, max_retries: int = 2):
+    def __init__(self, llm_router: LLMRouter, fallback: ReflectionEngine | None = None, max_retries: int = 2):
         self.llm_router = llm_router
         self.fallback = fallback or StubReflector()
         self.max_retries = max_retries
@@ -68,7 +64,7 @@ class LLMStructuredReflector(ReflectionEngine):
         ]
         return "\n".join(prompt_parts)
 
-    def _parse_llm_response(self, response: str) -> Tuple[str, Optional[NextAction]]:
+    def _parse_llm_response(self, response: str) -> tuple[str, NextAction | None]:
         """Parse the LLM's JSON response into reasoning and next action."""
         try:
             data = json.loads(response.strip())
@@ -82,7 +78,7 @@ class LLMStructuredReflector(ReflectionEngine):
 
         reasoning = data.get("reasoning")
         if not isinstance(reasoning, str):
-            logger.warning(f"LLM reflection response missing or invalid 'reasoning'")
+            logger.warning("LLM reflection response missing or invalid 'reasoning'")
             raise ValueError("Missing or invalid 'reasoning'")
 
         next_action_data = data.get("next_action")
@@ -94,7 +90,7 @@ class LLMStructuredReflector(ReflectionEngine):
 
             action_type = next_action_data.get("action_type")
             if not isinstance(action_type, str):
-                logger.warning(f"LLM reflection response missing or invalid 'action_type'")
+                logger.warning("LLM reflection response missing or invalid 'action_type'")
                 raise ValueError("Missing or invalid 'action_type'")
 
             payload = next_action_data.get("payload", {})
@@ -115,7 +111,7 @@ class LLMStructuredReflector(ReflectionEngine):
             elif action_type == NextActionType.ALTERNATIVE_TOOL:
                 tool_name = payload.get("tool_name")
                 if not isinstance(tool_name, str):
-                    logger.warning(f"ALTERNATIVE_TOOL missing or invalid 'tool_name' in payload")
+                    logger.warning("ALTERNATIVE_TOOL missing or invalid 'tool_name' in payload")
                     raise ValueError("ALTERNATIVE_TOOL requires 'tool_name' in payload")
                 # Remove tool_name from payload for the alternative_tool factory
                 alt_payload = {k: v for k, v in payload.items() if k != "tool_name"}
@@ -137,7 +133,7 @@ class LLMStructuredReflector(ReflectionEngine):
         attempt: Attempt,
         task_state: TaskGoalState,
         conv_state: ConversationState
-    ) -> Tuple[Reflection, Optional[NextAction]]:
+    ) -> tuple[Reflection, NextAction | None]:
         if not self.llm_router.is_available():
             logger.warning("LLM router not available, using fallback reflector")
             return self.fallback.reflect(attempt, task_state, conv_state)

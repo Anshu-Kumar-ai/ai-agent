@@ -1,15 +1,14 @@
 import json
 import logging
 import time
-from typing import List, Optional, Dict, Any
 
-from .base import Planner
-from ...core.state.action import Action, SandboxSpec, RetryPolicy
+from ...core.state.action import Action, RetryPolicy, SandboxSpec
+from ...core.state.agent_state import ConversationState, TaskGoalState
 from ...core.state.goal_state import Goal
-from ...core.state.agent_state import TaskGoalState, ConversationState
 from ...modules.executor.tool_registry import ToolRegistry
 from ...modules.llm.provider import LLMProvider
 from ...modules.planner.stub_planner import StubPlanner
+from .base import Planner
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +19,7 @@ class LLMPlanner(Planner):
     Falls back to StubPlanner on failure.
     """
 
-    def __init__(self, llm_provider: LLMProvider, fallback_planner: Optional[Planner] = None, max_retries: int = 2):
+    def __init__(self, llm_provider: LLMProvider, fallback_planner: Planner | None = None, max_retries: int = 2):
         self.llm_provider = llm_provider
         self.fallback_planner = fallback_planner or StubPlanner()
         self.max_retries = max_retries
@@ -100,7 +99,7 @@ class LLMPlanner(Planner):
 
         return "\n".join(prompt_parts)
 
-    def _parse_llm_response(self, response: str) -> List[Action]:
+    def _parse_llm_response(self, response: str) -> list[Action]:
         """Parse the LLM's JSON response into a list of Action objects."""
         try:
             data = json.loads(response.strip())
@@ -112,7 +111,7 @@ class LLMPlanner(Planner):
             logger.warning(f"LLM response is not a list: {data}")
             raise ValueError("Expected a JSON array")
 
-        actions: List[Action] = []
+        actions: list[Action] = []
         for i, item in enumerate(data):
             if not isinstance(item, dict):
                 logger.warning(f"LLM response item {i} is not an object: {item}")
@@ -147,7 +146,7 @@ class LLMPlanner(Planner):
 
         return actions
 
-    def plan(self, goal: Goal, task_state: TaskGoalState, conv_state: ConversationState) -> List[Action]:
+    def plan(self, goal: Goal, task_state: TaskGoalState, conv_state: ConversationState) -> list[Action]:
         """Generate a plan using the LLM, with fallback and retries."""
         if not self.llm_provider.is_available():
             logger.warning("LLM provider not available, using fallback planner")

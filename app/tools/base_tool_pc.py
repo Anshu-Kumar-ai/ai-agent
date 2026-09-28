@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, Tuple
+from typing import Any
 
-from app.core.state.action import Action, SandboxSpec
+from app.core.state.action import Action
 from app.core.state.observation import Observation
 
 
@@ -11,24 +11,20 @@ class Tool(ABC):
     @abstractmethod
     def name(self) -> str:
         """Unique identifier for the tool, e.g., 'fs.read'."""
-        pass
 
     @abstractmethod
     def prepare(self, action: Action) -> Any:
         """Prepare sandbox/resources; returns a context object."""
-        pass
 
     @abstractmethod
     def execute(self, action: Action, context: Any) -> Observation:
         """Execute the tool with given action and prepared context."""
-        pass
 
     @abstractmethod
     def cleanup(self, action: Action, context: Any) -> None:
         """Release any resources held by context."""
-        pass
 
-    def validate_arguments(self, arguments: Dict[str, Any]) -> Tuple[bool, str]:
+    def validate_arguments(self, arguments: dict[str, Any]) -> tuple[bool, str]:
         """Validate the arguments for this tool.
 
         Returns:

@@ -1,5 +1,6 @@
-from dataclasses import dataclass, field, asdict
-from typing import Dict, Any, Optional
+from dataclasses import asdict, dataclass, field
+from typing import Any
+
 
 class NextActionType:
     RETRY = "RETRY"
@@ -12,18 +13,18 @@ class NextActionType:
 @dataclass(frozen=True)
 class NextAction:
     action_type: str  # one of NextActionType constants
-    payload: Dict[str, Any] = field(default_factory=dict)
+    payload: dict[str, Any] = field(default_factory=dict)
     confidence: float = 1.0  # 0-1
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @staticmethod
-    def from_dict(data: Dict[str, Any]) -> 'NextAction':
+    def from_dict(data: dict[str, Any]) -> 'NextAction':
         return NextAction(**data)
 
     @staticmethod
-    def retry(payload: Optional[Dict[str, Any]] = None, confidence: float = 1.0) -> 'NextAction':
+    def retry(payload: dict[str, Any] | None = None, confidence: float = 1.0) -> 'NextAction':
         return NextAction(
             action_type=NextActionType.RETRY,
             payload={} if payload is None else dict(payload),
@@ -31,7 +32,7 @@ class NextAction:
         )
 
     @staticmethod
-    def alternative_tool(tool_name: str, payload: Optional[Dict[str, Any]] = None, confidence: float = 1.0) -> 'NextAction':
+    def alternative_tool(tool_name: str, payload: dict[str, Any] | None = None, confidence: float = 1.0) -> 'NextAction':
         return NextAction(
             action_type=NextActionType.ALTERNATIVE_TOOL,
             payload={"tool_name": tool_name, **(payload or {})},
@@ -39,7 +40,7 @@ class NextAction:
         )
 
     @staticmethod
-    def param_change(params: Dict[str, Any], confidence: float = 1.0) -> 'NextAction':
+    def param_change(params: dict[str, Any], confidence: float = 1.0) -> 'NextAction':
         return NextAction(
             action_type=NextActionType.PARAM_CHANGE,
             payload=dict(params),
@@ -47,7 +48,7 @@ class NextAction:
         )
 
     @staticmethod
-    def decompose_further(payload: Optional[Dict[str, Any]] = None, confidence: float = 1.0) -> 'NextAction':
+    def decompose_further(payload: dict[str, Any] | None = None, confidence: float = 1.0) -> 'NextAction':
         return NextAction(
             action_type=NextActionType.DECOMPOSE_FURTHER,
             payload={} if payload is None else dict(payload),
@@ -55,7 +56,7 @@ class NextAction:
         )
 
     @staticmethod
-    def wait_for_external(payload: Optional[Dict[str, Any]] = None, confidence: float = 1.0) -> 'NextAction':
+    def wait_for_external(payload: dict[str, Any] | None = None, confidence: float = 1.0) -> 'NextAction':
         return NextAction(
             action_type=NextActionType.WAIT_FOR_EXTERNAL,
             payload={} if payload is None else dict(payload),
@@ -63,7 +64,7 @@ class NextAction:
         )
 
     @staticmethod
-    def noop(payload: Optional[Dict[str, Any]] = None, confidence: float = 1.0) -> 'NextAction':
+    def noop(payload: dict[str, Any] | None = None, confidence: float = 1.0) -> 'NextAction':
         return NextAction(
             action_type=NextActionType.NOOP,
             payload={} if payload is None else dict(payload),

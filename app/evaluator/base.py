@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Tuple
+
 from ...core.state.action import Action
-from ...core.state.observation import Observation
-from ...core.state.goal_state import Goal
 from ...core.state.evaluation import EvaluationEnum, ProgressInfo
+from ...core.state.goal_state import Goal
+from ...core.state.observation import Observation
+
 
 class Evaluator(ABC):
     """Interface for evaluating an action attempt."""
@@ -15,7 +16,7 @@ class Evaluator(ABC):
         observation: Observation,
         goal: Goal,
         pre_task_state: dict
-    ) -> Tuple[EvaluationEnum, Optional[ProgressInfo]]:
+    ) -> tuple[EvaluationEnum, ProgressInfo | None]:
         """Return an evaluation and optional progress info.
 
         Args:
@@ -27,4 +28,3 @@ class Evaluator(ABC):
         Returns:
             A tuple (evaluation, progress_info).
         """
-        pass

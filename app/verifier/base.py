@@ -1,8 +1,9 @@
-from dataclasses import dataclass
-from typing import Any
 from abc import ABC, abstractmethod
-from ...core.state.goal_state import Goal
+from dataclasses import dataclass
+
 from ...core.state.agent_state import TaskGoalState
+from ...core.state.goal_state import Goal
+
 
 @dataclass(frozen=True)
 class VerificationResult:
@@ -14,4 +15,3 @@ class Verifier(ABC):
     @abstractmethod
     def verify(self, goal: Goal, task_state: TaskGoalState) -> VerificationResult:
         """Return VerificationResult indicating if goal is met."""
-        pass

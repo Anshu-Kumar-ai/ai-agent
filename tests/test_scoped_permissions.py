@@ -1,7 +1,8 @@
 import sys
-import time
+
 import pytest
-from app.core.permissions import PermissionManager, RiskLevel, ApprovalMode
+
+from app.core.permissions import PermissionManager, RiskLevel
 
 
 def test_scoped_session_allows_sibling_writes():
@@ -173,10 +174,10 @@ def test_windows_style_paths():
 
 
 def test_no_bypass_via_executor():
+    from app.tools.base import BaseTool
+    from app.tools.calculator import CalculatorTool
     from app.tools.executor import ToolExecutor
     from app.tools.registry import ToolRegistry
-    from app.tools.calculator import CalculatorTool
-    from app.tools.base import BaseTool
     registry = ToolRegistry()
     registry.register(CalculatorTool())
     executor = ToolExecutor(registry)

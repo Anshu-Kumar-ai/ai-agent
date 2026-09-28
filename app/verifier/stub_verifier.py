@@ -1,7 +1,8 @@
-from .base import Verifier, VerificationResult
-from ...core.state.goal_state import Goal
 from ...core.state.agent_state import TaskGoalState
-from ...core.state.observation import Observation, ToolStatus
+from ...core.state.goal_state import Goal
+from ...core.state.observation import ToolStatus
+from .base import VerificationResult, Verifier
+
 
 class StubVerifier(Verifier):
     """Verifier that succeeds if any echo tool action succeeded."""

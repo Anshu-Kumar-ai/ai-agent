@@ -1,12 +1,13 @@
-from dataclasses import dataclass, field
-from typing import Any, Optional
-from uuid import UUID, uuid4
 import time
 from copy import deepcopy
+from dataclasses import dataclass
+from typing import Any
+from uuid import UUID, uuid4
 
-from .observation import Observation
-from .evaluation import EvaluationEnum, ProgressInfo
 from .action import Action  # forward reference
+from .evaluation import EvaluationEnum, ProgressInfo
+from .observation import Observation
+
 
 @dataclass
 class Attempt:
@@ -15,7 +16,7 @@ class Attempt:
     pre_task_state_snapshot: Any  # shallow copy of relevant TaskGoalState
     observation: Observation
     evaluation: EvaluationEnum
-    progress_info: Optional[ProgressInfo]
+    progress_info: ProgressInfo | None
     started_at: float
     ended_at: float
     agent_state_version: int
@@ -44,7 +45,7 @@ class Attempt:
         self,
         observation: Observation,
         evaluation: EvaluationEnum,
-        progress_info: Optional[ProgressInfo]
+        progress_info: ProgressInfo | None
     ) -> None:
         """Mark the attempt as completed with the final results."""
         self.observation = observation

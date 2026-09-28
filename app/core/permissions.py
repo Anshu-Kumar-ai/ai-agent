@@ -1,16 +1,15 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import time
-import json
-import hashlib
+from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Any, Dict, List, Optional, Set, Tuple
-from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from app.tools.executor import ToolExecutor
-from app.tools.base import BaseTool
 
 
 class RiskLevel(Enum):
@@ -34,7 +33,7 @@ class Permission:
     args_hash: str
     scope: str
     granted_at: float
-    expires_at: Optional[float] = None  # None means permanent
+    expires_at: float | None = None  # None means permanent
     one_time: bool = False  # If True, permission is consumed after use
     session_only: bool = False  # If True, permission expires at end of session (handled externally)
 
@@ -46,12 +45,12 @@ class _ScopePermission:
     action_type: str               # e.g. "read", "write", "delete", "execute"
     scope_prefix: str              # absolute path prefix that is allowed
     granted_at: float
-    expires_at: Optional[float] = None   # None means permanent
+    expires_at: float | None = None   # None means permanent
     one_time: bool = False
     used: bool = False             # only relevant for one_time
 
 
-def _hash_args(args: Dict[str, Any]) -> str:
+def _hash_args(args: dict[str, Any]) -> str:
     """Create a stable hash of the arguments dict."""
     # Sort keys for consistent ordering
     sorted_items = sorted(args.items())
@@ -75,9 +74,9 @@ class PermissionManager:
 
     def __init__(
         self,
-        workspace_root: Optional[str] = None,
+        workspace_root: str | None = None,
         approval_mode: ApprovalMode = ApprovalMode.BALANCED,
-        audit_log_path: Optional[str] = None,
+        audit_log_path: str | None = None,
     ):
         self.workspace_root = os.path.abspath(
             workspace_root or os.getenv("HERMES_WORKSPACE", os.getcwd())
@@ -87,17 +86,17 @@ class PermissionManager:
         self.audit_log_path = audit_log_path
 
         # In-memory stores
-        self._session_permissions: Set[Tuple[str, str]] = set()          # (tool_name, args_hash)
-        self._one_time_permissions: Set[Tuple[str, str]] = set()
-        self._permanent_permissions: Set[Tuple[str, str]] = set()        # loaded from disk if needed
+        self._session_permissions: set[tuple[str, str]] = set()          # (tool_name, args_hash)
+        self._one_time_permissions: set[tuple[str, str]] = set()
+        self._permanent_permissions: set[tuple[str, str]] = set()        # loaded from disk if needed
 
         # NEW – scoped permissions
-        self._scoped_session: List[_ScopePermission] = []
-        self._scoped_one_time: List[_ScopePermission] = []
-        self._scoped_permanent: List[_ScopePermission] = []
+        self._scoped_session: list[_ScopePermission] = []
+        self._scoped_one_time: list[_ScopePermission] = []
+        self._scoped_permanent: list[_ScopePermission] = []
 
         # Audit log as list of dicts
-        self._audit_log: List[Dict[str, Any]] = []
+        self._audit_log: list[dict[str, Any]] = []
 
         # Load permanent permissions if audit log path is provided and file exists
         if self.audit_log_path and os.path.exists(self.audit_log_path):
@@ -114,7 +113,7 @@ class PermissionManager:
     # --------------------------------------------------------------------- #
     # Risk classification
     # --------------------------------------------------------------------- #
-    def classify_risk(self, tool_name: str, arguments: Dict[str, Any]) -> RiskLevel:
+    def classify_risk(self, tool_name: str, arguments: dict[str, Any]) -> RiskLevel:
         """Determine the risk level of a tool invocation."""
         tool_name_lower = tool_name.lower()
 
@@ -159,7 +158,7 @@ class PermissionManager:
         # Default to MEDIUM for unknown tools
         return RiskLevel.MEDIUM
 
-    def _has_outside_path(self, arguments: Dict[str, Any]) -> bool:
+    def _has_outside_path(self, arguments: dict[str, Any]) -> bool:
         """Heuristic: detect if any string argument looks like a file path outside workspace."""
         for val in arguments.values():
             if isinstance(val, str):
@@ -179,9 +178,7 @@ class PermissionManager:
                     return True
             elif isinstance(val, list):
                 for item in val:
-                    if isinstance(item, str) and self._has_outside_path({"path": item}):
-                        return True
-                    elif isinstance(item, dict) and self._has_outside_path(item):
+                    if isinstance(item, str) and self._has_outside_path({"path": item}) or isinstance(item, dict) and self._has_outside_path(item):
                         return True
         return False
 
@@ -191,9 +188,9 @@ class PermissionManager:
     def check_permission(
         self,
         tool_name: str,
-        arguments: Dict[str, Any],
-        risk_level: Optional[RiskLevel] = None,
-    ) -> Tuple[bool, str]:
+        arguments: dict[str, Any],
+        risk_level: RiskLevel | None = None,
+    ) -> tuple[bool, str]:
         """Returns (allowed, reason). If allowed is False, the caller should request user approval."""
         if risk_level is None:
             risk_level = self.classify_risk(tool_name, arguments)
@@ -286,7 +283,7 @@ class PermissionManager:
     def _check_scoped_permission(
         self,
         tool_name: str,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
         now: float,
     ) -> bool:
         """Return True if a matching scoped permission exists (and consume one‑time if applicable)."""
@@ -324,7 +321,7 @@ class PermissionManager:
                 return True
         return False
 
-    def _action_type(self, tool_name: str, arguments: Dict[str, Any]) -> str:
+    def _action_type(self, tool_name: str, arguments: dict[str, Any]) -> str:
         """Return a coarse‑grained action string used for scoping."""
         tn = tool_name.lower()
 
@@ -352,11 +349,11 @@ class PermissionManager:
             # If the path cannot be resolved (e.g., invalid characters), treat as outside
             return False
 
-    def _extract_path_arguments(self, arguments: Dict[str, Any]) -> List[str]:
+    def _extract_path_arguments(self, arguments: dict[str, Any]) -> list[str]:
         """Extract arguments that are explicitly file‑system paths.
         Prefers known keys (path, file_path, filename, directory, etc.) and falls back to heuristic.
         """
-        paths: List[str] = []
+        paths: list[str] = []
 
         def _maybe_add(val: Any):
             if isinstance(val, str):
@@ -403,7 +400,7 @@ class PermissionManager:
     def grant_permission(
         self,
         tool_name: str,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
         scope: str,
         duration: str = "session",
         one_time: bool = False,
@@ -494,7 +491,7 @@ class PermissionManager:
     def deny_permission(
         self,
         tool_name: str,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
         reason: str = "",
     ) -> None:
         self._log_audit(
@@ -512,7 +509,7 @@ class PermissionManager:
     def _log_audit(
         self,
         tool_name: str,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
         risk_level: RiskLevel,
         decision: bool,
         reason: str,
@@ -540,7 +537,7 @@ class PermissionManager:
     def _persist_permission(
         self,
         tool_name: str,
-        arguments: Dict[str, Any],
+        arguments: dict[str, Any],
         scope: str,
         granted_at: float,
     ) -> None:
@@ -566,7 +563,7 @@ class PermissionManager:
         except Exception:
             pass
 
-    def _sanitize_args(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
+    def _sanitize_args(self, arguments: dict[str, Any]) -> dict[str, Any]:
         """Remove potentially sensitive values from arguments before logging."""
         sanitized = {}
         for key, val in arguments.items():
@@ -590,7 +587,7 @@ class PermissionManager:
                 sanitized[key] = val
         return sanitized
 
-    def _describe_scope(self, arguments: Dict[str, Any]) -> str:
+    def _describe_scope(self, arguments: dict[str, Any]) -> str:
         """Produces a human‑readable scope description from arguments."""
         # For simplicity, we just note if any paths are within workspace.
         paths = []
@@ -607,9 +604,9 @@ class PermissionManager:
                 return f"outside workspace ({abs_path})"
         return "no file paths detected"
 
-    def _flatten_strings(self, obj: Any) -> List[str]:
+    def _flatten_strings(self, obj: Any) -> list[str]:
         """Recursively extract all strings from a nested structure."""
-        strings: List[str] = []
+        strings: list[str] = []
 
         def _extract(item: Any):
             if isinstance(item, str):

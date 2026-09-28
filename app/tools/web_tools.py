@@ -3,16 +3,12 @@
 Provides safe HTTP operations and web search capabilities.
 """
 
-import os
-import json
-import urllib.request
-import urllib.parse
 import urllib.error
-from typing import Any, Dict, List, Optional, Tuple
+import urllib.parse
+import urllib.request
+from typing import Any
 
 from app.tools.base import BaseTool
-from app.core.state.action import Action, SandboxSpec
-from app.core.state.observation import Observation, ToolStatus
 
 
 class HTTPFetchTool(BaseTool):
@@ -32,7 +28,7 @@ class HTTPFetchTool(BaseTool):
     }
     selection_phrases = ["fetch", "download", "get url", "http get", "http fetch"]
 
-    def validate_arguments(self, arguments: Dict[str, Any]) -> Tuple[bool, str]:
+    def validate_arguments(self, arguments: dict[str, Any]) -> tuple[bool, str]:
         url = arguments.get("url")
         if url is None:
             return False, "Missing 'url' argument"
@@ -114,7 +110,7 @@ class WebSearchTool(BaseTool):
     }
     selection_phrases = ["search web", "web search", "search internet", "google search", "duckduckgo"]
 
-    def validate_arguments(self, arguments: Dict[str, Any]) -> Tuple[bool, str]:
+    def validate_arguments(self, arguments: dict[str, Any]) -> tuple[bool, str]:
         query = arguments.get("query")
         if query is None:
             return False, "Missing 'query' argument"

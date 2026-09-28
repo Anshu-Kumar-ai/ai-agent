@@ -1,9 +1,10 @@
-from typing import Dict
+
 from .base_tool import Tool
+
 
 class ToolRegistry:
     """Simple registry mapping tool names to Tool instances."""
-    _mapping: Dict[str, Tool] = {}
+    _mapping: dict[str, Tool] = {}
 
     @classmethod
     def register(cls, tool: Tool) -> None:

@@ -1,9 +1,9 @@
-from typing import Optional
-from ...core.state.action import Action, SandboxSpec
+from ...core.state.action import Action
 from ...core.state.observation import Observation
+from ...modules.permission import PermissionLayer
 from .base_tool import Tool
 from .tool_registry import ToolRegistry
-from ...modules.permission import PermissionLayer
+
 
 class ToolExecutor:
     """Executes a tool action via the registry, applying permission checks."""

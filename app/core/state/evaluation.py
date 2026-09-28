@@ -1,6 +1,7 @@
+from dataclasses import asdict, dataclass, field
 from enum import Enum
-from dataclasses import dataclass, field, asdict
-from typing import Any, Dict, Optional
+from typing import Any
+
 
 class EvaluationEnum(Enum):
     TOOL_SUCCEEDED = "TOOL_SUCCEEDED"
@@ -23,13 +24,13 @@ class ProgressInfo:
     metric_name: str
     value: float  # normalized 0-1 or raw
     delta: float  # change from pre to post
-    details: Dict[str, Any] = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @staticmethod
-    def from_dict(data: Dict[str, Any]) -> 'ProgressInfo':
+    def from_dict(data: dict[str, Any]) -> 'ProgressInfo':
         return ProgressInfo(**data)
 
     @staticmethod

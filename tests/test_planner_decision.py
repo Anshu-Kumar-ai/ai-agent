@@ -2,7 +2,6 @@ import unittest
 
 from app.core.planner import Planner
 
-
 CALCULATOR_TOOL = {
     "name": "calculator",
     "description": "Evaluate a safe arithmetic expression.",

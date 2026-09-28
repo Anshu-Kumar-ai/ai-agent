@@ -1,12 +1,13 @@
-from typing import Dict, Optional
-from uuid import UUID
-from ..core.state.goal_state import Goal, SubGoal
 import time
+from uuid import UUID
+
+from ..core.state.goal_state import Goal, SubGoal
+
 
 class GoalManager:
     """Owns the lifecycle of Goal definitions and provides creation/retrieval."""
     def __init__(self):
-        self._goals: Dict[UUID, Goal] = {}
+        self._goals: dict[UUID, Goal] = {}
 
     def create_goal(self, description: str, success_criteria) -> Goal:
         goal = Goal.create(description, success_criteria)
@@ -27,5 +28,5 @@ class GoalManager:
         self._goals[subgoal.goal_id] = subgoal
         return subgoal
 
-    def get_goal(self, goal_id: UUID) -> Optional[Goal]:
+    def get_goal(self, goal_id: UUID) -> Goal | None:
         return self._goals.get(goal_id)

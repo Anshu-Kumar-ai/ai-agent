@@ -1,8 +1,8 @@
-from abc import ABC, abstractmethod
-from typing import Any, List, Optional
-from ..core.state.action import Action, SandboxSpec
-import os
 import logging
+import os
+from abc import ABC, abstractmethod
+
+from ..core.state.action import Action, SandboxSpec
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -12,12 +12,10 @@ class PermissionLayer(ABC):
     @abstractmethod
     def authorize(self, action: Action, sandbox: SandboxSpec) -> bool:
         """Return True if action is allowed, False otherwise."""
-        pass
 
     @abstractmethod
     def log_decision(self, action: Action, allowed: bool, reason: str = "") -> None:
         """Optional logging of the decision."""
-        pass
 
 
 class FilesystemAndTerminalPermissionLayer(PermissionLayer):
@@ -32,8 +30,8 @@ class FilesystemAndTerminalPermissionLayer(PermissionLayer):
 
     def __init__(
         self,
-        allowed_roots: Optional[List[str]] = None,
-        allowed_commands: Optional[List[str]] = None,
+        allowed_roots: list[str] | None = None,
+        allowed_commands: list[str] | None = None,
     ):
         """
         Args:

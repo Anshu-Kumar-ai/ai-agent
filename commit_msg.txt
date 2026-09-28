@@ -1,0 +1,15 @@
+Stage 9: Web Tools + Terminal + Full Tool Integration
+
+- Added web tools: HTTPFetchTool (http.fetch) and WebSearchTool (web.search) with proper error handling
+- Fixed fs.move adapter to accept both src/dst and source/destination parameter names
+- Fixed terminal.run adapter to accept both cmd and command parameter names
+- Added terminal.run to LOW risk tools (for FULL_AUTO mode testing)
+- Enhanced Evaluator with tool-specific relevance boosts:
+  - HTTP fetch: checks for "status:" + "fetched:" in response
+  - Web search: handles CAPTCHA/temporarily unavailable gracefully
+  - Write operations: checks for "bytes_written"/"written"/"created"
+  - Read operations: boosts short text content responses
+  - Move operations: boosts "true"/"moved"/"renamed" responses
+- Fixed LLMPlanner prompt with examples and explicit VALID TOOL NAMES list
+- All 67 tests passing
+- All 9 tools working: calculator, time, fs.read, fs.write, fs.move, fs.list, terminal.run, http.fetch, web.search

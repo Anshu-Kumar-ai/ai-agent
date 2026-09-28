@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import List, Optional
 
 
 @dataclass
@@ -15,8 +14,8 @@ class Evaluation:
 
     score: float
     feedback: str
-    criteria_met: List[str]
-    criteria_not_met: List[str]
+    criteria_met: list[str]
+    criteria_not_met: list[str]
 
     def __post_init__(self):
         if not isinstance(self.score, float) or not (0.0 <= self.score <= 1.0):

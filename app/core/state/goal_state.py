@@ -1,17 +1,18 @@
-from dataclasses import dataclass, field, asdict
-from typing import Dict, List, Optional, Any
-from uuid import UUID, uuid4
 import time
+from dataclasses import asdict, dataclass, field
+from typing import Any
+from uuid import UUID, uuid4
+
 
 @dataclass(frozen=True)
 class SuccessSpec:
-    criteria: Dict[str, Any] = field(default_factory=dict)
+    criteria: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @staticmethod
-    def from_dict(data: Dict[str, Any]) -> 'SuccessSpec':
+    def from_dict(data: dict[str, Any]) -> 'SuccessSpec':
         return SuccessSpec(**data)
 
 @dataclass(frozen=True)
@@ -19,12 +20,12 @@ class Goal:
     goal_id: UUID
     description: str
     success_criteria: SuccessSpec
-    subgoal_ids: List[UUID] = field(default_factory=list)
-    parent_goal_id: Optional[UUID] = None
+    subgoal_ids: list[UUID] = field(default_factory=list)
+    parent_goal_id: UUID | None = None
     created_at: float = field(default_factory=time.time)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         # Convert UUIDs to strings
         d['goal_id'] = str(self.goal_id)
@@ -35,7 +36,7 @@ class Goal:
         return d
 
     @staticmethod
-    def from_dict(data: Dict[str, Any]) -> 'Goal':
+    def from_dict(data: dict[str, Any]) -> 'Goal':
         data = data.copy()
         data['goal_id'] = UUID(data['goal_id'])
         data['subgoal_ids'] = [UUID(uid) for uid in data.get('subgoal_ids', [])]
@@ -65,7 +66,7 @@ class SubGoal(Goal):
     # that when we instantiate from_dict we get a SubGoal.
     # We'll override from_dict to return SubGoal.
     @staticmethod
-    def from_dict(data: Dict[str, Any]) -> 'SubGoal':
+    def from_dict(data: dict[str, Any]) -> 'SubGoal':
         data = data.copy()
         data['goal_id'] = UUID(data['goal_id'])
         data['subgoal_ids'] = [UUID(uid) for uid in data.get('subgoal_ids', [])]

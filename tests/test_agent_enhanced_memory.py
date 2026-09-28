@@ -9,7 +9,6 @@ from app.tools.calculator import CalculatorTool
 from app.tools.executor import ToolExecutor
 from app.tools.registry import ToolRegistry
 
-
 CALCULATOR_META = {
     "name": "calculator",
     "description": "Evaluate basic arithmetic expressions such as 2 + 3 * 4, (10 / 2), or 5 ** 2.",
@@ -68,7 +67,6 @@ class AgentEnhancedMemoryTests(unittest.TestCase):
         agent.run("What is 25 * 4 + 10?")
 
         # Check the context for the second request includes the observation and reflection
-        from app.core.planner import Plan
 
         # Also mock evaluator to return high score to avoid retries
         original_evaluator = agent.evaluator

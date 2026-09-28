@@ -24,11 +24,11 @@
     "latency_ema": 4.278153510751229
   },
   "local": {
-    "requests": 103,
-    "successes": 103,
+    "requests": 117,
+    "successes": 117,
     "failures": 0,
-    "total_latency": 897.6674582999954,
+    "total_latency": 1001.9907539999936,
     "health_ema": 0.9999999999999996,
-    "latency_ema": 5.825977722786838
+    "latency_ema": 6.018718549620353
   }
 }

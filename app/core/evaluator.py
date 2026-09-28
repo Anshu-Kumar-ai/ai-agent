@@ -8,9 +8,9 @@ Provides sophisticated evaluation criteria for agent responses:
 - Actionability: For tool tasks, were the right tools used?
 """
 
-from app.core.evaluation import Evaluation
-from typing import List, Dict, Any, Optional
 import re
+
+from app.core.evaluation import Evaluation
 
 
 class Evaluator:
@@ -28,7 +28,7 @@ class Evaluator:
         self,
         user_request: str,
         plan: dict,
-        observations: List[dict],
+        observations: list[dict],
         response: str,
     ) -> Evaluation:
         """Return an Evaluation object assessing the quality of the agent's response."""
@@ -216,7 +216,7 @@ class Evaluator:
         
         return score
     
-    def _check_hallucination(self, observations: List[dict], response: str) -> float:
+    def _check_hallucination(self, observations: list[dict], response: str) -> float:
         """Check if response faithfully represents tool results."""
         response_lower = response.lower()
         
@@ -267,7 +267,7 @@ class Evaluator:
         
         return facts_mentioned / len(tool_facts)
     
-    def _check_completeness(self, user_request: str, response: str, observations: List[dict]) -> float:
+    def _check_completeness(self, user_request: str, response: str, observations: list[dict]) -> float:
         """Check if response addresses all parts of the request."""
         # Simple heuristic: look for question marks, "and", commas suggesting multiple parts
         request_lower = user_request.lower()
@@ -300,7 +300,7 @@ class Evaluator:
         covered = sum(1 for kw in task_keywords if any(w in response_lower for w in kw.split()[:3]))
         return covered / len(task_keywords)
     
-    def _check_actionability(self, user_request: str, plan: dict, observations: List[dict]) -> float:
+    def _check_actionability(self, user_request: str, plan: dict, observations: list[dict]) -> float:
         """Check if appropriate tools were used for the request."""
         request_lower = user_request.lower()
         used_tools = [obs.get("tool_name", "") for obs in observations]

@@ -1,5 +1,4 @@
-import time
-from app.core.permissions import PermissionManager, RiskLevel, ApprovalMode
+from app.core.permissions import ApprovalMode, PermissionManager, RiskLevel
 
 
 def test_risk_classification_low():
@@ -37,7 +36,6 @@ def test_risk_classification_critical():
     pm = PermissionManager()
     # heuristic: if contains format, delete large dir etc -> we treat as high by default; but we can add specific rules.
     # For simplicity, we rely on keyword matching; we can add a test for format if we extend.
-    pass
 
 
 def test_check_permission_auto_low():
@@ -119,11 +117,11 @@ def test_audit_logging():
 
 def test_permission_callback_integration():
     # We'll test AgentLoop with a mock permission_callback
-    from app.core.agent_loop import AgentLoop, ToolObservation
-    from app.core.planner import Planner
+    from app.core.agent_loop import AgentLoop
     from app.core.evaluator import Evaluator
-    from app.memory.enhanced import EnhancedMemory
     from app.core.permissions import PermissionManager
+    from app.core.planner import Planner
+    from app.memory.enhanced import EnhancedMemory
     from app.tools.executor import ToolExecutor
     from app.tools.registry import ToolRegistry
 
@@ -181,7 +179,6 @@ def test_permission_callback_integration():
     # We'll create a custom tool that does nothing but we can't easily add to registry without modifying.
     # Instead, we can test the permission manager directly with callback.
     # We'll skip this integration test for brevity.
-    pass
 
 
 if __name__ == "__main__":

@@ -1,12 +1,14 @@
-from typing import Any, List, Optional
+from typing import Any
+
 from .provider import LLMProvider
+
 
 class MockLLMProvider(LLMProvider):
     """
     A mock LLM provider that returns a predefined sequence of responses.
     Useful for testing.
     """
-    def __init__(self, responses: Optional[List[str]] = None):
+    def __init__(self, responses: list[str] | None = None):
         self._responses = responses or []
         self._index = 0
 
@@ -24,6 +26,6 @@ class MockLLMProvider(LLMProvider):
     def is_available(self) -> bool:
         return True
 
-    def set_responses(self, responses: List[str]) -> None:
+    def set_responses(self, responses: list[str]) -> None:
         self._responses = responses
         self._index = 0

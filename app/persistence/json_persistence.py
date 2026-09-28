@@ -4,21 +4,14 @@ JSON persistence for the Orchestrator state.
 
 import json
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 from uuid import UUID
 
 from myagent.core.orchestrator import Orchestrator
-from myagent.core.state.agent_state import TaskGoalState, ConversationState
-from myagent.core.state.goal_state import Goal, SuccessSpec
-from myagent.core.state.action import Action, SandboxSpec, RetryPolicy
-from myagent.core.state.observation import Observation, ToolStatus
-from myagent.core.state.evaluation import EvaluationEnum, ProgressInfo
-from myagent.core.state.reflection import Reflection
-from myagent.core.state.next_action import NextAction, NextActionType
-from myagent.core.state.attempt import Attempt
+from myagent.core.state.agent_state import ConversationState, TaskGoalState
 
 
-def _extract_state(orchestrator: Orchestrator) -> Dict[str, Any]:
+def _extract_state(orchestrator: Orchestrator) -> dict[str, Any]:
     """Extract the serializable state from the orchestrator."""
     state = {
         "task_state": orchestrator.task_state.to_dict(),
@@ -32,7 +25,7 @@ def _extract_state(orchestrator: Orchestrator) -> Dict[str, Any]:
     return state
 
 
-def _restore_state(orchestrator: Orchestrator, state: Dict[str, Any]) -> None:
+def _restore_state(orchestrator: Orchestrator, state: dict[str, Any]) -> None:
     """Restore the orchestrator's state from the serialized state."""
     orchestrator.task_state = TaskGoalState.from_dict(state["task_state"])
     orchestrator.conv_state = ConversationState.from_dict(state["conv_state"])

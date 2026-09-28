@@ -1,9 +1,10 @@
-from typing import Optional, Tuple
-from .base import Evaluator
+
 from ...core.state.action import Action
-from ...core.state.observation import Observation, ToolStatus
-from ...core.state.goal_state import Goal
 from ...core.state.evaluation import EvaluationEnum, ProgressInfo
+from ...core.state.goal_state import Goal
+from ...core.state.observation import Observation, ToolStatus
+from .base import Evaluator
+
 
 class DefaultEvaluator(Evaluator):
     """Default evaluator that assesses the outcome of an action."""
@@ -14,7 +15,7 @@ class DefaultEvaluator(Evaluator):
         observation: Observation,
         goal: Goal,
         pre_task_state: dict
-    ) -> Tuple[EvaluationEnum, Optional[ProgressInfo]]:
+    ) -> tuple[EvaluationEnum, ProgressInfo | None]:
         if observation.status == ToolStatus.SUCCESS:
             progress = ProgressInfo(
                 metric_name="side_effects_count",

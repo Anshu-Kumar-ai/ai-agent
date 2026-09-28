@@ -1,10 +1,9 @@
-from typing import Any, Dict, Optional
 
-from ...core.state.goal_state import Goal
-from ...core.state.agent_state import TaskGoalState
-from ...core.state.observation import ToolStatus
-from .base import Verifier, VerificationResult
 import os
+
+from ...core.state.agent_state import TaskGoalState
+from ...core.state.goal_state import Goal
+from .base import VerificationResult, Verifier
 
 
 class FileExistsVerifier(Verifier):

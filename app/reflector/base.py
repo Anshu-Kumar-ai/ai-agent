@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Tuple, Any
-from ...core.state.action import Action
+
+from ...core.state.agent_state import ConversationState, TaskGoalState
 from ...core.state.attempt import Attempt
-from ...core.state.agent_state import TaskGoalState, ConversationState
-from ...core.state.reflection import Reflection, NextAction
+from ...core.state.reflection import NextAction, Reflection
+
 
 class ReflectionEngine(ABC):
     """Interface for reflecting on an attempt and suggesting next steps."""
@@ -13,6 +13,5 @@ class ReflectionEngine(ABC):
         attempt: Attempt,
         task_state: TaskGoalState,
         conv_state: ConversationState
-    ) -> Tuple[Reflection, Optional[NextAction]]:
+    ) -> tuple[Reflection, NextAction | None]:
         """Return a Reflection record and an optional NextAction suggestion."""
-        pass

@@ -1,12 +1,13 @@
-from dataclasses import dataclass
-from typing import Any, Callable, Optional
 import datetime
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
 
-from app.tools.executor import ToolExecutor
 from app.core.evaluation import Evaluation
 from app.core.evaluator import Evaluator
-from app.memory.enhanced import ProviderFailure, EnhancedMemory
 from app.core.permissions import PermissionManager
+from app.memory.enhanced import EnhancedMemory, ProviderFailure
+from app.tools.executor import ToolExecutor
 
 
 @dataclass
@@ -48,7 +49,7 @@ class ToolObservation:
 
 class AgentLoop:
     """Run a bounded plan, act, observe, evaluate, and re-plan cycle.
-    
+
     Supports evaluation-driven retry: if the evaluation score is below threshold,
     the loop will continue to re-plan with feedback from the evaluation.
     """
@@ -58,14 +59,14 @@ class AgentLoop:
         planner,
         tool_executor: ToolExecutor,
         max_steps: int = 3,
-        reflection_callback: Optional[Callable[[str, Any], None]] = None,
-        evaluator: Optional[Evaluator] = None,
-        evaluation_callback: Optional[Callable[[Evaluation], None]] = None,
+        reflection_callback: Callable[[str, Any], None] | None = None,
+        evaluator: Evaluator | None = None,
+        evaluation_callback: Callable[[Evaluation], None] | None = None,
         evaluation_threshold: float = 0.7,
         max_retries: int = 2,  # New: max retries after evaluation failure
-        memory: Optional[EnhancedMemory] = None,
-        permission_manager: Optional[PermissionManager] = None,
-        permission_callback: Optional[Callable[[str, str, dict], bool]] = None,
+        memory: EnhancedMemory | None = None,
+        permission_manager: PermissionManager | None = None,
+        permission_callback: Callable[[str, str, dict], bool] | None = None,
     ):
         if not isinstance(tool_executor, ToolExecutor):
             raise TypeError("tool_executor must be a ToolExecutor")
@@ -91,8 +92,8 @@ class AgentLoop:
         message: str,
         available_tools: list[dict],
         responder: Callable[[list[ToolObservation]], str],
-        reflection_callback: Optional[Callable[[str, Any], None]] = None,
-        context: Optional[str] = None,
+        reflection_callback: Callable[[str, Any], None] | None = None,
+        context: str | None = None,
     ) -> str:
         """Execute tool plans until the planner responds or the limit is reached.
         After proposing a response, evaluate it. If the evaluation is below threshold,
@@ -227,7 +228,7 @@ class AgentLoop:
             f"Agent loop reached the maximum tool steps ({self.max_steps})"
         )
 
-    def _build_retry_context(self, original_context: Optional[str], feedback: str) -> str:
+    def _build_retry_context(self, original_context: str | None, feedback: str) -> str:
         """Build enhanced context with evaluation feedback for retry."""
         parts = []
         if original_context:
@@ -239,15 +240,15 @@ class AgentLoop:
     def _generate_retry_feedback(self, evaluation: Evaluation) -> str:
         """Generate actionable feedback from evaluation for retry."""
         parts = [f"Evaluation Score: {evaluation.score:.2f} (threshold: {getattr(self, 'evaluation_threshold', 0.7):.2f})"]
-        
+
         if evaluation.criteria_not_met:
             parts.append("Criteria not met:")
             for criterion in evaluation.criteria_not_met:
                 parts.append(f"  - {criterion}")
-        
+
         if evaluation.feedback:
             parts.append(f"Feedback: {evaluation.feedback}")
-        
+
         # Add specific guidance based on failed criteria
         guidance = []
         if "no_hallucination" in evaluation.criteria_not_met:
@@ -260,12 +261,12 @@ class AgentLoop:
             guidance.append("Cover all aspects of the user's request.")
         if "appropriate_tools_used" in evaluation.criteria_not_met:
             guidance.append("Consider whether you used the most appropriate tools for the task.")
-        
+
         if guidance:
             parts.append("Guidance for improvement:")
             for g in guidance:
                 parts.append(f"  - {g}")
-        
+
         return "\n".join(parts)
 
     def _describe_scope(self, arguments: dict) -> str:

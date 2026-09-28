@@ -1,10 +1,12 @@
-from typing import Any, Dict, List, Optional
-from dataclasses import dataclass, asdict
+import datetime
 from collections import defaultdict
+from dataclasses import asdict, dataclass
+from typing import Any
+
+from app.core.evaluation import Evaluation
 from app.core.planner import Plan
 from app.memory.memory import ConversationMemory
-from app.core.evaluation import Evaluation
-import datetime
+
 
 @dataclass
 class Attempt:
@@ -12,7 +14,7 @@ class Attempt:
 
     task_id: str
     plan: dict
-    tool_name: Optional[str] | None
+    tool_name: str | None
     arguments: dict
     observation: Any
     evaluation_score: float
@@ -23,7 +25,7 @@ class ComparisonResult:
 
     task_id: str
     current_score: float
-    best_previous_score: Optional[float]
+    best_previous_score: float | None
     score_delta: float
     is_improvement: bool
     meets_success_threshold: bool
@@ -35,7 +37,7 @@ class ProviderFailure:
 
     provider: str
     model: str
-    status_code: Optional[int]
+    status_code: int | None
     error_type: str
     retry_count: int
     timestamp: datetime
@@ -114,7 +116,7 @@ class EnhancedMemory(ConversationMemory):
         """Return a copy of stored evaluations."""
         return list(self.evaluations)
 
-    def add_attempt(self, task_id: str, plan: Plan, tool_name: Optional[str], arguments: dict, observation: Any, evaluation: Evaluation) -> None:
+    def add_attempt(self, task_id: str, plan: Plan, tool_name: str | None, arguments: dict, observation: Any, evaluation: Evaluation) -> None:
         """Store an attempt for a given task."""
         if not isinstance(task_id, str) or not task_id.strip():
             raise ValueError("task_id must be a non-empty string")
@@ -140,11 +142,11 @@ class EnhancedMemory(ConversationMemory):
         if len(self.attempts[task_id]) > self.max_attempts_per_task:
             self.attempts[task_id] = self.attempts[task_id][-self.max_attempts_per_task:]
 
-    def get_attempts(self, task_id: str) -> List[Attempt]:
+    def get_attempts(self, task_id: str) -> list[Attempt]:
         """Get all attempts for a given task."""
         return list(self.attempts.get(task_id, []))
 
-    def get_best_attempt(self, task_id: str) -> Optional[Attempt]:
+    def get_best_attempt(self, task_id: str) -> Attempt | None:
         """Get the attempt with the highest evaluation score for a task."""
         attempts = self.attempts.get(task_id)
         if not attempts:

@@ -1,5 +1,6 @@
-from dataclasses import dataclass, field, asdict
-from typing import Any, Dict
+from dataclasses import asdict, dataclass, field
+from typing import Any
+
 
 class ToolStatus:
     SUCCESS = "SUCCESS"
@@ -12,15 +13,15 @@ class ToolStatus:
 class Observation:
     status: str
     payload: Any = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    side_effects: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
+    side_effects: dict[str, Any] = field(default_factory=dict)
     raw: str = ""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @staticmethod
-    def from_dict(data: Dict[str, Any]) -> 'Observation':
+    def from_dict(data: dict[str, Any]) -> 'Observation':
         return Observation(**data)
 
     @staticmethod

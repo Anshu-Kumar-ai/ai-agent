@@ -1,22 +1,20 @@
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any
-from uuid import UUID, uuid4
 import time
+from dataclasses import dataclass, field
+from typing import Any
+from uuid import UUID
 
-from .observation import Observation
-from .evaluation import EvaluationEnum, ProgressInfo
-from .action import Action
 from .attempt import Attempt
+
 
 @dataclass
 class TaskGoalState:
     version: int
-    active_goal_id: Optional[UUID]
-    goal_stack: List[UUID]
-    progress_metrics: Dict[str, float]
-    attempt_history: List['Attempt']
-    working_memory: Dict[str, Any]
-    sandbox_context: Dict[str, Any]
+    active_goal_id: UUID | None
+    goal_stack: list[UUID]
+    progress_metrics: dict[str, float]
+    attempt_history: list['Attempt']
+    working_memory: dict[str, Any]
+    sandbox_context: dict[str, Any]
 
     @staticmethod
     def initial() -> 'TaskGoalState':
@@ -58,8 +56,8 @@ class TaskGoalState:
 
 @dataclass
 class ConversationState:
-    turns: List['Turn'] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    turns: list['Turn'] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def add_user_utterance(self, text: str) -> None:
         self.turns.append(Turn(role="user", text=text, timestamp=time.time()))
@@ -71,7 +69,7 @@ class ConversationState:
         if len(self.turns) > 20:
             self.turns = self.turns[-20:]
 
-    def get_recent_turns(self, n: int) -> List['Turn']:
+    def get_recent_turns(self, n: int) -> list['Turn']:
         return self.turns[-n:] if n <= len(self.turns) else self.turns[:]
 
     def to_dict(self) -> dict:

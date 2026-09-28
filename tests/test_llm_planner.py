@@ -1,12 +1,11 @@
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-from app.core.agent_loop import AgentLoop, ToolObservation
+from app.core.agent_loop import AgentLoop
 from app.core.planner import Plan
 from app.tools.calculator import CalculatorTool
 from app.tools.executor import ToolExecutor
 from app.tools.registry import ToolRegistry
-
 
 CALCULATOR_META = {
     "name": "calculator",

@@ -1,5 +1,5 @@
 import json
-from typing import Any, Optional
+from typing import Any
 
 from app.core.planner import Plan
 from app.core.router import SmartRouter
@@ -21,7 +21,7 @@ class LLMPlanner:
         message: str,
         available_tools: list[dict],
         observations: list[Any] | None = None,
-        context: Optional[str] = None,
+        context: str | None = None,
     ) -> Plan:
         """Generate a plan using the LLM and validate it through Plan.from_dict().
         The context is incorporated into the prompt to inform the LLM about past evaluations.
@@ -48,7 +48,7 @@ class LLMPlanner:
 
         return Plan.from_dict(plan_dict)
 
-    def _build_prompt(self, message: str, available_tools: list[dict], context: Optional[str] = None) -> str:
+    def _build_prompt(self, message: str, available_tools: list[dict], context: str | None = None) -> str:
         """Construct a system prompt with tool schemas, instructions, and context."""
         tools_json = json.dumps(available_tools, indent=2)
 
@@ -83,12 +83,9 @@ USER REQUEST: {message}
         """Parse and validate the LLM's JSON response."""
         response = response.strip()
 
-        if response.startswith("```json"):
-            response = response[7:]
-        if response.startswith("```"):
-            response = response[3:]
-        if response.endswith("```"):
-            response = response[:-3]
+        response = response.removeprefix("```json")
+        response = response.removeprefix("```")
+        response = response.removesuffix("```")
 
         response = response.strip()
 

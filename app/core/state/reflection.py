@@ -1,12 +1,13 @@
-from dataclasses import dataclass, field, asdict
-from typing import Optional, Dict, Any
-from uuid import UUID, uuid4
 import time
+from dataclasses import asdict, dataclass
+from typing import Any
+from uuid import UUID, uuid4
 
 from .action import Action
-from .observation import Observation
 from .evaluation import EvaluationEnum, ProgressInfo
 from .next_action import NextAction
+from .observation import Observation
+
 
 @dataclass(frozen=True)
 class Reflection:
@@ -16,12 +17,12 @@ class Reflection:
     action: Action
     observation: Observation
     evaluation: EvaluationEnum
-    progress_info: Optional[ProgressInfo]
+    progress_info: ProgressInfo | None
     reasoning: str
-    next_action: Optional[NextAction]
+    next_action: NextAction | None
     timestamp: float
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         # Convert UUIDs to strings
         d['reflection_id'] = str(self.reflection_id)
@@ -43,7 +44,7 @@ class Reflection:
         return d
 
     @staticmethod
-    def from_dict(data: Dict[str, Any]) -> 'Reflection':
+    def from_dict(data: dict[str, Any]) -> 'Reflection':
         data = data.copy()
         data['reflection_id'] = UUID(data['reflection_id'])
         data['attempt_id'] = UUID(data['attempt_id'])
@@ -65,7 +66,7 @@ class Reflection:
         attempt: 'Attempt',
         goal_id: UUID,
         reasoning: str,
-        next_action: Optional[NextAction] = None
+        next_action: NextAction | None = None
     ) -> 'Reflection':
         return Reflection(
             reflection_id=uuid4(),

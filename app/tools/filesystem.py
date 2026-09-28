@@ -1,9 +1,9 @@
 import os
 import shutil
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
-from app.core.state.action import Action, SandboxSpec
-from app.core.state.observation import Observation, ToolStatus
+from app.core.state.action import Action
+from app.core.state.observation import Observation
 from app.tools.base_tool_pc import Tool
 
 
@@ -49,7 +49,7 @@ class ReadFileTool(Tool):
         except Exception as e:
             return Observation.error(f"Error reading file: {e}")
 
-    def validate_arguments(self, arguments: Dict[str, Any]) -> Tuple[bool, str]:
+    def validate_arguments(self, arguments: dict[str, Any]) -> tuple[bool, str]:
         path = arguments.get("path")
         if path is None:
             return False, "Missing 'path' argument"
@@ -103,7 +103,7 @@ class WriteFileTool(Tool):
         except Exception as e:
             return Observation.error(f"Error writing file: {e}")
 
-    def validate_arguments(self, arguments: Dict[str, Any]) -> Tuple[bool, str]:
+    def validate_arguments(self, arguments: dict[str, Any]) -> tuple[bool, str]:
         path = arguments.get("path")
         if path is None:
             return False, "Missing 'path' argument"
@@ -169,7 +169,7 @@ class MoveFileTool(Tool):
         except Exception as e:
             return Observation.error(f"Error moving file: {e}")
 
-    def validate_arguments(self, arguments: Dict[str, Any]) -> Tuple[bool, str]:
+    def validate_arguments(self, arguments: dict[str, Any]) -> tuple[bool, str]:
         src = arguments.get("src")
         if src is None:
             return False, "Missing 'src' argument"
@@ -240,7 +240,7 @@ class ListFileTool(Tool):
         except Exception as e:
             return Observation.error(f"Error listing directory: {e}")
 
-    def validate_arguments(self, arguments: Dict[str, Any]) -> Tuple[bool, str]:
+    def validate_arguments(self, arguments: dict[str, Any]) -> tuple[bool, str]:
         path = arguments.get("path")
         if path is None:
             return False, "Missing 'path' argument"
@@ -254,7 +254,6 @@ class ListFileTool(Tool):
 
 def register_filesystem_tools(executor):
     """Register all filesystem tools with the executor."""
-    from app.tools.registry import ToolRegistry
     from app.tools.executor import ToolExecutor
     
     if not isinstance(executor, ToolExecutor):

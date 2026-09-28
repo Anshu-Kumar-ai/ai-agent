@@ -1,7 +1,7 @@
 from app.models.gemini import GeminiModel
 from app.models.groq import GroqModel
-from app.models.openrouter import OpenRouterModel
 from app.models.local import LocalModel
+from app.models.openrouter import OpenRouterModel
 
 
 class ModelGateway:

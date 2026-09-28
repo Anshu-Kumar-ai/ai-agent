@@ -1,9 +1,9 @@
 import os
 import subprocess
 import time
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
-from app.core.state.action import Action, SandboxSpec
+from app.core.state.action import Action
 from app.core.state.observation import Observation, ToolStatus
 from app.tools.base_tool_pc import Tool
 
@@ -122,7 +122,7 @@ class RunCommandTool(Tool):
             side_effects={}  # side effects are not known; the verifier can check filesystem changes if needed.
         )
 
-    def validate_arguments(self, arguments: Dict[str, Any]) -> Tuple[bool, str]:
+    def validate_arguments(self, arguments: dict[str, Any]) -> tuple[bool, str]:
         """Validate the arguments for this tool."""
         cmd = arguments.get("cmd")
         if cmd is None:

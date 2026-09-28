@@ -1,32 +1,29 @@
-from typing import Optional, Callable
+from collections.abc import Callable
+
 from app.core.agent_loop import AgentLoop
+from app.core.evaluator import Evaluator
+from app.core.permissions import PermissionManager
 from app.core.planner import LLMPlanner
 from app.core.router import SmartRouter
 from app.memory.enhanced import EnhancedMemory
-from app.tools.calculator import CalculatorTool
-from app.tools.time_tool import TimeTool
-from app.tools.executor import ToolExecutor
-from app.tools.registry import ToolRegistry
-from app.core.evaluator import Evaluator
-from app.core.evaluation import Evaluation
-from app.core.permissions import PermissionManager
-
-# Import new adapter tools
 from app.tools.adapters import (
+    FSListTool,
+    FSMoveTool,
     FSReadTool,
     FSWriteTool,
-    FSMoveTool,
-    FSListTool,
     TerminalRunTool,
 )
-# Import web tools
+from app.tools.calculator import CalculatorTool
+from app.tools.executor import ToolExecutor
+from app.tools.registry import ToolRegistry
+from app.tools.time_tool import TimeTool
 from app.tools.web_tools import HTTPFetchTool, WebSearchTool
 
 
 class Agent:
     """AI agent with memory, planning, routing, and tool execution."""
 
-    def __init__(self, max_memory_messages: int = 10, permission_callback: Optional[Callable[[str, str, dict], bool]] = None):
+    def __init__(self, max_memory_messages: int = 10, permission_callback: Callable[[str, str, dict], bool] | None = None):
         self.router = SmartRouter()
         self.memory = EnhancedMemory(
             max_messages=max_memory_messages
@@ -34,24 +31,24 @@ class Agent:
         self.permission_manager = PermissionManager()
 
         self.tool_registry = ToolRegistry()
-        
+
         # Register original tools
         self.tool_registry.register(CalculatorTool())
         self.tool_registry.register(TimeTool())
-        
+
         # Register filesystem tools
         self.tool_registry.register(FSReadTool())
         self.tool_registry.register(FSWriteTool())
         self.tool_registry.register(FSMoveTool())
         self.tool_registry.register(FSListTool())
-        
+
         # Register terminal tool
         self.tool_registry.register(TerminalRunTool())
-        
+
         # Register web tools
         self.tool_registry.register(HTTPFetchTool())
         self.tool_registry.register(WebSearchTool())
-        
+
         # Create tool_executor
         self.tool_executor = ToolExecutor(self.tool_registry)
 
@@ -67,7 +64,7 @@ class Agent:
             permission_callback=permission_callback,
         )
 
-    def set_permission_callback(self, callback: Optional[Callable[[str, str, dict], bool]]):
+    def set_permission_callback(self, callback: Callable[[str, str, dict], bool] | None):
         """Set or update the permission callback used to request user approval."""
         self.agent_loop.permission_callback = callback
 
