@@ -1,0 +1,210 @@
+name: Integration Tests (Real Providers)
+
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: 'LLM provider to test (gemini, groq, openrouter, local)'
+        required: false
+        type: choice
+        options: ['gemini', 'groq', 'openrouter', 'local']
+        default: 'gemini'
+      test-suite:
+        description: 'Test suite to run'
+        required: false
+        type: choice
+        options: ['all', 'smoke', 'full']
+        default: 'smoke'
+  schedule:
+    # Run weekly on Monday at 2 AM UTC
+    - cron: '0 2 * * 1'
+  pull_request:
+    types: [labeled]
+    branches: [main, master]
+
+jobs:
+  integration-tests:
+    name: Integration Tests (${{ github.event.inputs.provider || 'gemini' }})
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.label.name == 'integration-test')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # Only run if required secrets are available
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[test]"
+
+    - name: Validate required secrets
+      run: |
+        provider="${{ github.event.inputs.provider || 'gemini' }}"
+        case $provider in
+          gemini)
+            if [ -z "$GEMINI_API_KEY" ]; then
+              echo "::error::GEMINI_API_KEY secret not set"
+              exit 1
+            fi
+            ;;
+          groq)
+            if [ -z "$GROQ_API_KEY" ]; then
+              echo "::error::GROQ_API_KEY secret not set"
+              exit 1
+            fi
+            ;;
+          openrouter)
+            if [ -z "$OPENROUTER_API_KEY" ]; then
+              echo "::error::OPENROUTER_API_KEY secret not set"
+              exit 1
+            fi
+            ;;
+          local)
+            echo "Local provider (Ollama) - no API key required"
+            ;;
+        esac
+        echo "✓ Required secrets available for provider: $provider"
+
+    - name: Install Ollama (for local provider tests)
+      if: github.event.inputs.provider == 'local' || github.event.inputs.provider == ''
+      run: |
+        curl -fsSL https://ollama.com/install.sh | sh
+        ollama serve &
+        sleep 5
+        ollama pull llama3.2:3b || true
+
+    - name: Run integration tests
+      run: |
+        provider="${{ github.event.inputs.provider || 'gemini' }}"
+        test_suite="${{ github.event.inputs.test-suite || 'smoke' }}"
+
+        if [ "$test_suite" = "smoke" ]; then
+          # Quick smoke test - just verify provider connectivity
+          python -m pytest tests/ -v -m "integration" -k "smoke" --timeout=60 --tb=short
+        elif [ "$test_suite" = "full" ]; then
+          # Full integration test suite
+          python -m pytest tests/ -v -m "integration" --timeout=120 --tb=short
+        else
+          # All integration tests
+          python -m pytest tests/ -v -m "integration" --timeout=120 --tb=short
+        fi
+      env:
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
+        MOCK_LLM_PROVIDERS: "false"
+
+    - name: Run agent integration test
+      if: always()
+      run: |
+        python test_full.py
+      env:
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
+        MOCK_LLM_PROVIDERS: "false"
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: integration-test-results
+        path: |
+          test-results.xml
+          coverage.xml
+        retention-days: 30
+
+  # Separate job for running tests on schedule with all providers
+  scheduled-integration:
+    name: Scheduled Integration (All Providers)
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      matrix:
+        provider: [gemini, groq, openrouter]
+        # local provider requires Ollama which may not be reliable in CI
+        # include:
+        #   - provider: local
+      fail-fast: false
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[test]"
+
+    - name: Validate secrets for provider
+      run: |
+        provider="${{ matrix.provider }}"
+        case $provider in
+          gemini)
+            if [ -z "$GEMINI_API_KEY" ]; then
+              echo "::warning::GEMINI_API_KEY secret not set, skipping"
+              exit 78  # Skip this matrix entry
+            fi
+            ;;
+          groq)
+            if [ -z "$GROQ_API_KEY" ]; then
+              echo "::warning::GROQ_API_KEY secret not set, skipping"
+              exit 78
+            fi
+            ;;
+          openrouter)
+            if [ -z "$OPENROUTER_API_KEY" ]; then
+              echo "::warning::OPENROUTER_API_KEY secret not set, skipping"
+              exit 78
+            fi
+            ;;
+        esac
+        echo "✓ Provider ${{ matrix.provider }} has required secrets"
+
+    - name: Run provider-specific integration tests
+      run: |
+        python -m pytest tests/ -v -m "integration" --timeout=120 --tb=short -k "${{ matrix.provider }}"
+      env:
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
+        MOCK_LLM_PROVIDERS: "false"
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: scheduled-integration-${{ matrix.provider }}
+        path: |
+          test-results.xml
+          coverage.xml
+        retention-days: 14

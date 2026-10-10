@@ -17,7 +17,7 @@ from app.tools.terminal_tools import RunCommandTool as PCTerminalTool
 
 class FSReadTool(BaseTool):
     """Adapter for pc_agent ReadFileTool."""
-    
+
     name = "fs.read"
     description = "Read the contents of a text file"
     parameters = {
@@ -31,15 +31,17 @@ class FSReadTool(BaseTool):
 
     def __init__(self):
         self.pc_tool = PCReadFileTool()
-    
-    def execute(self, **kwargs) -> Any:
+
+    def execute(self, path: str, workspace: str = None, **kwargs) -> Any:
+        if workspace is None:
+            workspace = os.getenv("HERMES_WORKSPACE", os.getcwd())
         action = Action.create(
             tool_name=self.name,
-            arguments=kwargs,
-            sandbox=SandboxSpec(fs_root=os.getenv("HERMES_WORKSPACE", os.getcwd()))
+            arguments={"path": path},
+            sandbox=SandboxSpec(fs_root=workspace)
         )
         result = self.pc_tool.execute(action, None)
-        
+
         if result.status == ToolStatus.SUCCESS:
             return result.payload
         elif result.status == ToolStatus.ERROR:
@@ -50,7 +52,7 @@ class FSReadTool(BaseTool):
             raise PermissionError("Permission denied")
         else:
             raise RuntimeError(f"Tool failed with status: {result.status}")
-    
+
     def validate_arguments(self, arguments: dict) -> None:
         valid, error = self.pc_tool.validate_arguments(arguments)
         if not valid:
@@ -59,7 +61,7 @@ class FSReadTool(BaseTool):
 
 class FSWriteTool(BaseTool):
     """Adapter for pc_agent WriteFileTool."""
-    
+
     name = "fs.write"
     description = "Write content to a file, creating directories as needed"
     parameters = {
@@ -74,15 +76,17 @@ class FSWriteTool(BaseTool):
 
     def __init__(self):
         self.pc_tool = PCWriteFileTool()
-    
-    def execute(self, **kwargs) -> Any:
+
+    def execute(self, path: str, content: str, workspace: str = None, **kwargs) -> Any:
+        if workspace is None:
+            workspace = os.getenv("HERMES_WORKSPACE", os.getcwd())
         action = Action.create(
             tool_name=self.name,
-            arguments=kwargs,
-            sandbox=SandboxSpec(fs_root=os.getenv("HERMES_WORKSPACE", os.getcwd()))
+            arguments={"path": path, "content": content},
+            sandbox=SandboxSpec(fs_root=workspace)
         )
         result = self.pc_tool.execute(action, None)
-        
+
         if result.status == ToolStatus.SUCCESS:
             return result.payload
         elif result.status == ToolStatus.ERROR:
@@ -93,7 +97,7 @@ class FSWriteTool(BaseTool):
             raise PermissionError("Permission denied")
         else:
             raise RuntimeError(f"Tool failed with status: {result.status}")
-    
+
     def validate_arguments(self, arguments: dict) -> None:
         valid, error = self.pc_tool.validate_arguments(arguments)
         if not valid:
@@ -102,7 +106,7 @@ class FSWriteTool(BaseTool):
 
 class FSMoveTool(BaseTool):
     """Adapter for pc_agent MoveFileTool."""
-    
+
     name = "fs.move"
     description = "Move or rename a file or directory"
     parameters = {
@@ -119,7 +123,7 @@ class FSMoveTool(BaseTool):
 
     def __init__(self):
         self.pc_tool = PCMoveFileTool()
-    
+
     def execute(self, **kwargs) -> Any:
         # Handle both src/dst and source/destination parameter names
         if "source" in kwargs and "src" not in kwargs:
@@ -128,14 +132,14 @@ class FSMoveTool(BaseTool):
         if "destination" in kwargs and "dst" not in kwargs:
             kwargs = dict(kwargs)
             kwargs["dst"] = kwargs.pop("destination")
-        
+
         action = Action.create(
             tool_name=self.name,
             arguments=kwargs,
             sandbox=SandboxSpec(fs_root=os.getenv("HERMES_WORKSPACE", os.getcwd()))
         )
         result = self.pc_tool.execute(action, None)
-        
+
         if result.status == ToolStatus.SUCCESS:
             return result.payload
         elif result.status == ToolStatus.ERROR:
@@ -146,7 +150,7 @@ class FSMoveTool(BaseTool):
             raise PermissionError("Permission denied")
         else:
             raise RuntimeError(f"Tool failed with status: {result.status}")
-    
+
     def validate_arguments(self, arguments: dict) -> None:
         # Handle both src/dst and source/destination parameter names
         if "source" in arguments and "src" not in arguments:
@@ -155,7 +159,7 @@ class FSMoveTool(BaseTool):
         if "destination" in arguments and "dst" not in arguments:
             arguments = dict(arguments)
             arguments["dst"] = arguments.pop("destination")
-        
+
         valid, error = self.pc_tool.validate_arguments(arguments)
         if not valid:
             raise ValueError(error)
@@ -163,7 +167,7 @@ class FSMoveTool(BaseTool):
 
 class FSListTool(BaseTool):
     """Adapter for pc_agent ListFileTool."""
-    
+
     name = "fs.list"
     description = "List files and directories in a path"
     parameters = {
@@ -177,20 +181,20 @@ class FSListTool(BaseTool):
 
     def __init__(self):
         self.pc_tool = PCListFileTool()
-    
+
     def execute(self, **kwargs) -> Any:
         # Provide default path if not specified
         if "path" not in kwargs or not kwargs["path"]:
             kwargs = dict(kwargs)
             kwargs["path"] = "."
-        
+
         action = Action.create(
             tool_name=self.name,
             arguments=kwargs,
             sandbox=SandboxSpec(fs_root=os.getenv("HERMES_WORKSPACE", os.getcwd()))
         )
         result = self.pc_tool.execute(action, None)
-        
+
         if result.status == ToolStatus.SUCCESS:
             return result.payload
         elif result.status == ToolStatus.ERROR:
@@ -201,7 +205,7 @@ class FSListTool(BaseTool):
             raise PermissionError("Permission denied")
         else:
             raise RuntimeError(f"Tool failed with status: {result.status}")
-    
+
     def validate_arguments(self, arguments: dict) -> None:
         # path is optional for fs.list - provide default if missing
         valid, error = self.pc_tool.validate_arguments(arguments)
@@ -214,7 +218,7 @@ class FSListTool(BaseTool):
 
 class TerminalRunTool(BaseTool):
     """Adapter for pc_agent RunCommandTool."""
-    
+
     name = "terminal.run"
     description = "Run a shell command"
     parameters = {
@@ -230,20 +234,22 @@ class TerminalRunTool(BaseTool):
 
     def __init__(self):
         self.pc_tool = PCTerminalTool()
-    
-    def execute(self, **kwargs) -> Any:
+
+    def execute(self, cmd, workspace: str = None, timeout: int = 30, **kwargs) -> Any:
         # Handle both cmd and command parameter names
         if "command" in kwargs and "cmd" not in kwargs:
-            kwargs = dict(kwargs)
-            kwargs["cmd"] = kwargs.pop("command")
+            cmd = kwargs.pop("command")
+        
+        if workspace is None:
+            workspace = os.getenv("HERMES_WORKSPACE", os.getcwd())
         
         action = Action.create(
             tool_name=self.name,
-            arguments=kwargs,
-            sandbox=SandboxSpec(fs_root=os.getenv("HERMES_WORKSPACE", os.getcwd()))
+            arguments={"cmd": cmd, "timeout": timeout},
+            sandbox=SandboxSpec(fs_root=workspace)
         )
         result = self.pc_tool.execute(action, None)
-        
+
         if result.status == ToolStatus.SUCCESS:
             return result.payload
         elif result.status == ToolStatus.ERROR:
@@ -254,13 +260,13 @@ class TerminalRunTool(BaseTool):
             raise PermissionError("Permission denied")
         else:
             raise RuntimeError(f"Tool failed with status: {result.status}")
-    
+
     def validate_arguments(self, arguments: dict) -> None:
         # Handle both cmd and command parameter names
         if "command" in arguments and "cmd" not in arguments:
             arguments = dict(arguments)
             arguments["cmd"] = arguments.pop("command")
-        
+
         valid, error = self.pc_tool.validate_arguments(arguments)
         if not valid:
             raise ValueError(error)

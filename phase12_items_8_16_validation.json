@@ -1,0 +1,83 @@
+[
+  {
+    "item": 8,
+    "description": "Cross-Task Isolation Attacks",
+    "status": "DEFERRED",
+    "severity": "MEDIUM",
+    "impact": "Requires TaskExecutor-level workspace isolation",
+    "evidence": "Tool executor shares workspace; isolation at TaskExecutor level",
+    "remediation": "Implement cross-task test with separate workspaces"
+  },
+  {
+    "item": 9,
+    "description": "Memory/Planning Security",
+    "status": "DEFERRED",
+    "severity": "MEDIUM",
+    "impact": "No malicious observation injection test",
+    "evidence": "Memory store is data layer; sanitization at monitoring emission",
+    "remediation": "Add observation injection test at TaskExecutor level"
+  },
+  {
+    "item": 10,
+    "description": "Data/Secret Leakage",
+    "status": "COMPLETE",
+    "severity": "LOW",
+    "impact": "Sanitization works at monitoring emission",
+    "evidence": "sanitize_metadata() redacts api_key, authorization, password",
+    "remediation": "None needed"
+  },
+  {
+    "item": 11,
+    "description": "Malformed Input Robustness",
+    "status": "DEFERRED",
+    "severity": "MEDIUM",
+    "impact": "No systematic fuzz/null/oversized test",
+    "evidence": "Basic boundary tests pass; no comprehensive fuzz test",
+    "remediation": "Add systematic malformed input test suite"
+  },
+  {
+    "item": 12,
+    "description": "Resource Exhaustion",
+    "status": "DEFERRED",
+    "severity": "MEDIUM",
+    "impact": "No systematic long-command/large-output/concurrent test",
+    "evidence": "Basic resource tests pass; no systematic stress test",
+    "remediation": "Add systematic resource exhaustion test suite"
+  },
+  {
+    "item": 13,
+    "description": "Browser/Desktop Security",
+    "status": "DEFERRED",
+    "severity": "MEDIUM",
+    "impact": "No file:// navigation or cross-window targeting test",
+    "evidence": "Tools available but no security-specific tests",
+    "remediation": "Add file:// navigation block test; cross-window targeting test"
+  },
+  {
+    "item": 14,
+    "description": "Monitoring Security",
+    "status": "COMPLETE",
+    "severity": "LOW",
+    "impact": "Sanitization verified under load",
+    "evidence": "100 events with secret metadata - all sanitized",
+    "remediation": "None needed"
+  },
+  {
+    "item": 15,
+    "description": "Static Security Review",
+    "status": "COMPLETE",
+    "severity": "INFORMATIONAL",
+    "impact": "Review completed in Phase 14",
+    "evidence": "62 findings: 0 CRITICAL, 0 HIGH, 61 MEDIUM, 1 LOW",
+    "remediation": "MEDIUM findings documented; no CRITICAL/HIGH"
+  },
+  {
+    "item": 16,
+    "description": "Real-World Attack Demos",
+    "status": "DEFERRED",
+    "severity": "LOW",
+    "impact": "No A-G demonstration scenarios automated",
+    "evidence": "Requires manual attack simulation",
+    "remediation": "Create attack demo scripts for CI integration"
+  }
+]

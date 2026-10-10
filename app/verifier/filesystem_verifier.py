@@ -37,7 +37,7 @@ class FileContentVerifier(Verifier):
         if not os.path.isfile(path):
             return VerificationResult(success=False, detail=f"File not found: {path}")
         try:
-            with open(path, 'r', encoding='utf-8') as f:
+            with open(path, encoding='utf-8') as f:
                 content = f.read()
         except Exception as e:
             return VerificationResult(success=False, detail=f"Error reading file: {e}")

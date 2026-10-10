@@ -33,3 +33,9 @@ class Tool(ABC):
             By default, returns (True, "") meaning no validation is performed.
         """
         return True, ""
+
+    def run(self, **kwargs) -> Any:
+        """Convenience method that creates an Action and executes the tool."""
+        from app.core.state.action import Action
+        action = Action.create(tool_name=self.name, arguments=kwargs)
+        return self.execute(action, None)

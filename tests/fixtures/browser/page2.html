@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Page 2 - Browser Test Fixture</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .container { background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; }
+        button:hover { background: #0056b3; }
+        .link-button { display: inline-block; padding: 10px 20px; margin: 5px; text-decoration: none; color: white; background: #28a745; border-radius: 4px; }
+        .link-button:hover { background: #218838; }
+        #result { background: #f8f9fa; padding: 15px; border-radius: 4px; margin: 10px 0; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <h1>Page 2 - Browser Test Fixture</h1>
+    <p>This is the second page for navigation testing.</p>
+
+    <div class="container">
+        <h2>Navigation</h2>
+        <a href="index.html" class="link-button">Back to Page 1</a>
+        <a href="page3.html" class="link-button">Go to Page 3</a>
+        <button id="back-btn" onclick="window.history.back()">Go Back</button>
+    </div>
+
+    <div class="container">
+        <h2>Page 2 Content</h2>
+        <p>This page has different content to verify navigation worked.</p>
+        <button id="page2-btn" onclick="document.getElementById('result').textContent = 'Page 2 button clicked at ' + new Date().toLocaleTimeString();">Page 2 Button</button>
+        <div id="result">Waiting...</div>
+    </div>
+
+    <div class="container">
+        <h2>Form on Page 2</h2>
+        <form id="page2-form" onsubmit="event.preventDefault(); document.getElementById('result').textContent = 'Form submitted: ' + new FormData(event.target).get('data');">
+            <label>Data:</label>
+            <input type="text" name="data" value="page2-data" required>
+            <button type="submit">Submit</button>
+        </form>
+    </div>
+
+    <script>
+        window.testInteractions = window.testInteractions || [];
+        document.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                window.testInteractions.push({
+                    type: 'click',
+                    id: btn.id,
+                    page: 'page2',
+                    time: Date.now()
+                });
+            });
+        });
+    </script>
+</body>
+</html>

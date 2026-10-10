@@ -6,9 +6,11 @@ Provides safe HTTP operations and web search capabilities.
 import urllib.error
 import urllib.parse
 import urllib.request
+import re
 from typing import Any
 
 from app.tools.base import BaseTool
+from app.core.state.observation import Observation
 
 
 class HTTPFetchTool(BaseTool):
@@ -54,7 +56,7 @@ class HTTPFetchTool(BaseTool):
                     return False, "Header keys and values must be strings"
         return True, ""
 
-    def execute(self, **kwargs) -> Any:
+    def execute(self, **kwargs) -> Observation:
         url = kwargs.get("url")
         timeout = kwargs.get("timeout", 30)
         headers = kwargs.get("headers", {})
@@ -69,30 +71,38 @@ class HTTPFetchTool(BaseTool):
                 status_code = response.getcode()
                 content_type = response.getheader('Content-Type', '')
         except urllib.error.HTTPError as e:
-            return {
-                "status": "error",
-                "error": f"HTTP {e.code}: {e.reason}",
-                "status_code": e.code,
-                "url": url
-            }
+            return Observation.create_error(
+                f"HTTP {e.code}: {e.reason}",
+                metadata={"status_code": e.code, "url": url}
+            )
         except urllib.error.URLError as e:
-            return {
-                "status": "error",
-                "error": f"URL error: {e.reason}",
-                "url": url
-            }
+            return Observation.create_error(
+                f"URL error: {e.reason}",
+                metadata={"url": url}
+            )
         except Exception as e:
-            return {
-                "status": "error",
-                "error": f"Fetch failed: {e}",
-                "url": url
-            }
+            return Observation.create_error(
+                f"Fetch failed: {e}",
+                metadata={"url": url}
+            )
 
         # Truncate if needed
         if max_chars > 0 and len(content) > max_chars:
             content = content[:max_chars] + f"\n... [truncated at {max_chars} chars]"
 
-        return f"Fetched: {url}\nStatus: {status_code}\nContent-Type: {content_type}\nSize: {len(content)} chars\n\n{content}"
+        return Observation.create_success(
+            payload={
+                "url": url,
+                "status_code": status_code,
+                "content_type": content_type,
+                "content": content,
+            },
+            metadata={
+                "url": url,
+                "status_code": status_code,
+                "size": len(content),
+            }
+        )
 
 
 class WebSearchTool(BaseTool):
@@ -122,12 +132,11 @@ class WebSearchTool(BaseTool):
                 return False, "'max_results' must be a positive integer"
         return True, ""
 
-    def execute(self, **kwargs) -> Any:
+    def execute(self, **kwargs) -> Observation:
         query = kwargs.get("query")
         max_results = kwargs.get("max_results", 10)
 
         # Use DuckDuckGo HTML as a free search fallback
-        # This is a simplified implementation - in production you'd use a proper search API
         search_url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query)}"
 
         req = urllib.request.Request(
@@ -139,21 +148,19 @@ class WebSearchTool(BaseTool):
             with urllib.request.urlopen(req, timeout=15) as response:
                 html = response.read().decode('utf-8', errors='replace')
         except Exception as e:
-            return (
+            return Observation.create_error(
                 f"Search failed: {e}"
             )
 
         # Check for CAPTCHA/challenge page
         if "anomaly-modal" in html or "bots use DuckDuckGo" in html:
-            return (
+            return Observation.create_error(
                 "Search temporarily unavailable: DuckDuckGo is showing a CAPTCHA challenge. "
                 "This is a known limitation of the free HTML interface. "
                 "Consider using a proper search API (Google, Bing, SerpAPI) for production use."
             )
 
         # Parse HTML for results (simplified regex-based extraction)
-        # Updated patterns for current DuckDuckGo HTML structure
-        # Try multiple patterns for different HTML structures
         result_patterns = [
             r'class="result__snippet">([^<]+)</a>',
             r'class="result__snippet">([^<]+)</span>',
@@ -161,23 +168,23 @@ class WebSearchTool(BaseTool):
             r'data-result="snippet">([^<]+)</span>',
             r'<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([^<]+)</a>',
         ]
-        
+
         url_patterns = [
             r'class="result__url">([^<]+)</a>',
             r'class="result__url">([^<]+)</span>',
             r'data-result="url">([^<]+)</a>',
             r'data-result="url">([^<]+)</span>',
         ]
-        
+
         snippets = []
         urls = []
-        
+
         # Try each pattern until we find matches
         for pattern in result_patterns:
             snippets = re.findall(pattern, html)
             if snippets:
                 break
-        
+
         for pattern in url_patterns:
             urls = re.findall(pattern, html)
             if urls:
@@ -185,14 +192,14 @@ class WebSearchTool(BaseTool):
 
         # If still no results, try more generic patterns
         if not snippets:
-            # Try to find any text that looks like a search result
             generic_pattern = r'<a[^>]*class="[^"]*result[^"]*"[^>]*>([^<]{20,})</a>'
             snippets = re.findall(generic_pattern, html)
-        
+
         if not urls:
             generic_url_pattern = r'<a[^>]*class="[^"]*result__url[^"]*"[^>]*>([^<]+)</a>'
             urls = re.findall(generic_url_pattern, html)
 
+        results = []
         for i, (snippet, url) in enumerate(zip(snippets, urls)):
             if i >= max_results:
                 break
@@ -204,20 +211,23 @@ class WebSearchTool(BaseTool):
 
         # If parsing failed, return basic info
         if not results:
-            return (
+            return Observation.create_error(
                 "Search completed but no structured results extracted. "
                 "DuckDuckGo's HTML structure may have changed. "
                 "Consider using a proper search API (Google, Bing, SerpAPI) for production use."
             )
 
-        # Format results as a readable string
-        lines = [f"Search results for: {query}"]
-        for i, result in enumerate(results[:max_results], 1):
-            lines.append(f"{i}. {result.get('title', '')}")
-            lines.append(f"   URL: {result.get('url', '')}")
-            lines.append(f"   Snippet: {result.get('snippet', '')}")
-            lines.append("")
-        return "\n".join(lines)
+        # Format results
+        return Observation.create_success(
+            payload={
+                "query": query,
+                "results": results,
+            },
+            metadata={
+                "query": query,
+                "result_count": len(results),
+            }
+        )
 
 
 def register_web_tools(registry, executor):

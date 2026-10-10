@@ -85,6 +85,14 @@ class EnhancedMemory(ConversationMemory):
         if "name" not in skill or not isinstance(skill["name"], str) or not skill["name"].strip():
             raise ValueError("skill must have a non-empty name")
 
+        # Also support simple key-value format for backward compatibility
+        # If skill is a dict with "name" and "description", use that
+        # If it's a dict with a single key-value, convert it
+        if len(skill) == 1 and "name" not in skill:
+            key = list(skill.keys())[0]
+            value = skill[key]
+            skill = {"name": key, "description": str(value)}
+
         self.skills.append(skill)
         self.skills = self.skills[-self.max_skills:]
 
@@ -228,3 +236,13 @@ class EnhancedMemory(ConversationMemory):
             "Answer the user's latest message while considering the previous conversation, tool observations, available skills, self-reflections, and evaluations.",
         ])
         return "\n".join(lines)
+
+    def clear(self) -> None:
+        """Clear all memory data."""
+        super().clear()
+        self.tool_observations.clear()
+        self.skills.clear()
+        self.reflections.clear()
+        self.evaluations.clear()
+        self.attempts.clear()
+        self.task_counter = 0

@@ -84,6 +84,8 @@ python -m venv .venv
 
 # Install dependencies
 pip install -r requirements.txt
+# Or install with dev dependencies
+pip install -e ".[dev]"
 ```
 
 ### Configuration
@@ -101,8 +103,33 @@ HERMES_WORKSPACE=C:\path\to\workspace  # Optional
 # Run all tests
 python -m pytest tests/ -v
 
+# Run unit tests only (mocked LLM providers, no API keys needed)
+python -m pytest tests/ -v -m "not integration"
+
+# Run integration tests (requires API keys)
+python -m pytest tests/ -v -m "integration"
+
 # Run specific test file
 python -m pytest tests/test_agent_enhanced_memory.py -v
+```
+
+### Code Quality Checks
+```bash
+# Run linting
+ruff check app/ tests/
+
+# Auto-fix linting issues
+ruff check app/ tests/ --fix
+
+# Format code
+ruff format app/ tests/
+
+# Type checking
+mypy app/
+
+# Security scan
+bandit -r app/
+safety check -r requirements.txt
 ```
 
 ### Running the Agent
@@ -119,6 +146,63 @@ print(response)
 response = agent.run("What is 25 * 4 + 10?")
 print(response)
 ```
+
+### CLI/REPL Interface
+```bash
+# Interactive REPL
+python -m app.cli
+
+# With FULL_AUTO mode
+python -m app.cli --mode FULL_AUTO
+
+# Single message
+python -m app.cli --message "What is 2+2?"
+
+# Load previous session
+python -m app.cli --load session.json
+```
+
+### CI/CD Pipeline
+This project uses GitHub Actions for continuous integration:
+
+- **CI Workflow** (`.github/workflows/ci.yml`): Runs on every push/PR
+  - Unit tests on Python 3.11 & 3.12 (with mocked LLM providers)
+  - Linting with ruff
+  - Type checking with mypy
+  - Security scanning with bandit & safety
+  - Package building and verification
+
+- **Integration Tests** (`.github/workflows/integration.yml`): Runs on demand or weekly
+  - Real provider tests using GitHub Secrets
+  - Smoke, full, or provider-specific test suites
+  - Scheduled weekly runs for all providers
+
+- **Release Workflow** (`.github/workflows/release.yml`): On version tags
+  - Automated PyPI publishing
+  - GitHub Release creation
+
+To run integration tests locally:
+```bash
+# Set environment variables
+export GEMINI_API_KEY=your_key
+export GROQ_API_KEY=your_key
+export OPENROUTER_API_KEY=your_key
+
+# Run integration tests
+MOCK_LLM_PROVIDERS=false python -m pytest tests/ -m integration -v
+```
+
+### Pre-commit Hooks
+```bash
+# Install pre-commit hooks
+pip install pre-commit
+pre-commit install
+
+# Run manually
+pre-commit run --all-files
+```
+
+## Tools
 
 ## Tools
 
@@ -199,7 +283,7 @@ AI-Agent/
 ├── .gitignore
 ├── requirements.txt
 └── README.md
-```
+``` 
 
 ## Milestones
 
@@ -213,8 +297,57 @@ AI-Agent/
 | 6 | Memory, Skills, Reflection | ✅ |
 | 7 | Enhanced Memory Wired | ✅ |
 | 8 | Evaluation-Driven Retry | ✅ |
-| 9 | GitHub Organization + CI/CD | 🔄 Next |
+| 9 | GitHub Organization + CI/CD | ✅ |
+
+## CI/CD Pipeline Details
+
+### GitHub Actions Workflows
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| `ci.yml` | Push/PR to main/master | Unit tests, linting, type checking, security scan, build |
+| `integration.yml` | Manual dispatch, weekly schedule, PR label | Real provider integration tests |
+| `release.yml` | Version tags (v*) | Build, verify, publish to PyPI, create GitHub Release |
+
+### Branch Protection Recommendations
+
+These settings should be configured in GitHub repository settings (requires admin access):
+
+```
+Branch: main
+- Require pull request reviews before merging
+  - Require 1 approval
+  - Dismiss stale reviews when new commits are pushed
+- Require status checks to pass before merging
+  - Required checks: test (3.11), test (3.12), lint, security, build
+- Require branches to be up to date before merging
+- Require linear history
+- Do not allow force pushes
+- Do not allow deletions
+```
+
+### Release Automation
+
+Releases are automated via the `release.yml` workflow:
+
+1. Push a version tag: `git tag v0.1.0 && git push origin v0.1.0`
+2. Workflow automatically:
+   - Builds and verifies the package
+   - Creates GitHub Release with auto-generated notes
+   - Publishes to PyPI (if public repo and PYPI_API_TOKEN secret configured)
+   - Creates GitHub Release with artifacts
+
+### Required GitHub Secrets
+
+For full CI/CD functionality, configure these secrets in GitHub repository settings:
+
+| Secret | Required For | Description |
+|--------|--------------|-------------|
+| `GEMINI_API_KEY` | Integration tests | Google Gemini API key |
+| `GROQ_API_KEY` | Integration tests | Groq API key |
+| `OPENROUTER_API_KEY` | Integration tests | OpenRouter API key |
+| `OPENROUTER_MODEL` | Integration tests | OpenRouter model name (e.g., `openrouter/free`) |
+| `PYPI_API_TOKEN` | Release workflow | PyPI API token for publishing |
+| `GITHUB_TOKEN` | Release workflow | Automatically provided by GitHub |
 
 ## License
-
-MIT

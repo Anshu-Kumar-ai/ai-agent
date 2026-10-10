@@ -193,7 +193,7 @@ def test_no_bypass_via_executor():
     registry.register(DummyWriteTool())
     # Now try to execute without permission
     try:
-        safe_execute(executor, pm, "write_file", path="/tmp/foo.txt", data="test")
+        safe_execute(pm, executor, "write_file", path="/tmp/foo.txt", data="test")
         assert False, "Expected PermissionError"
     except PermissionError:
         pass  # expected
@@ -204,7 +204,7 @@ def test_no_bypass_via_executor():
         scope="/tmp/foo.txt",
         duration="session",
     )
-    result = safe_execute(executor, pm, "write_file", path="/tmp/foo.txt", data="test")
+    result = safe_execute(pm, executor, "write_file", path="/tmp/foo.txt", data="test")
     assert "wrote" in result
 
 

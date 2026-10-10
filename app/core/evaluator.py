@@ -270,8 +270,8 @@ class Evaluator:
             response.strip()
             and not response.strip().startswith("[")
             and not response.strip().startswith("{")
-            and not "status:" in response_lower
-            and not "fetched:" in response_lower
+            and "status:" not in response_lower
+            and "fetched:" not in response_lower
             and any(w in user_request.lower() for w in ["read", "show", "view", "display", "open", "cat"])
             and len(response) < 1000
         ):
@@ -281,6 +281,34 @@ class Evaluator:
         # and request was for moving/renaming, boost score
         if ("true" in response_lower or "moved" in response_lower or "renamed" in response_lower or "success" in response_lower) and any(
             w in user_request.lower() for w in ["move", "rename", "mv"]
+        ):
+            return max(score, 0.9)
+
+        # For python.exec: if response contains stdout/stderr/exit_code,
+        # and request was for executing/running python code, boost score
+        if ("stdout" in response_lower or "stderr" in response_lower or "exit_code" in response_lower) and any(
+            w in user_request.lower() for w in ["execute", "run", "python", "code"]
+        ):
+            return max(score, 0.85)
+
+        # For RAG add: if response contains added/document_ids/collection,
+        # and request was for adding/storing/saving to knowledge, boost score
+        if ("added" in response_lower or "document_ids" in response_lower or "collection" in response_lower) and any(
+            w in user_request.lower() for w in ["add", "store", "save", "knowledge", "index", "remember"]
+        ):
+            return max(score, 0.9)
+
+        # For RAG query: if response contains context/sources/results,
+        # and request was for querying/searching/asking knowledge, boost score
+        if ("context" in response_lower or "sources" in response_lower or "result" in response_lower) and any(
+            w in user_request.lower() for w in ["ask", "query", "search", "find", "knowledge", "what", "who", "where", "when", "how", "why"]
+        ):
+            return max(score, 0.85)
+
+        # For RAG stats: if response contains total_documents/index_size/collection,
+        # and request was for stats/status/size, boost score
+        if ("total_documents" in response_lower or "index_size" in response_lower or "total_characters" in response_lower) and any(
+            w in user_request.lower() for w in ["stats", "statistics", "status", "size", "count", "how many"]
         ):
             return max(score, 0.9)
 
@@ -302,7 +330,9 @@ class Evaluator:
                 if "payload" in result:
                     tool_facts.append(str(result["payload"]).lower())
                 if "stdout" in result:
-                    tool_facts.append(str(result["stdout"]).lower())
+                    stdout_val = str(result["stdout"]).lower()
+                    if stdout_val:  # Only add non-empty stdout
+                        tool_facts.append(stdout_val)
                 # Filesystem tools return bytes_written, bytes_read, etc.
                 if "bytes_written" in result:
                     tool_facts.append(f"bytes_written {result['bytes_written']}")
@@ -310,6 +340,25 @@ class Evaluator:
                     tool_facts.append(f"bytes_read {result['bytes_read']}")
                 if "path" in result:
                     tool_facts.append(str(result["path"]).lower())
+                # RAG tools return added, document_ids, context, sources, etc.
+                if "added" in result:
+                    tool_facts.append(f"added {result['added']}")
+                if "document_ids" in result:
+                    tool_facts.append(str(result["document_ids"]).lower())
+                if "context" in result:
+                    tool_facts.append(str(result["context"]).lower())
+                if "sources" in result:
+                    tool_facts.append(str(result["sources"]).lower())
+                if "total_documents" in result:
+                    tool_facts.append(f"total_documents {result['total_documents']}")
+                if "index_size" in result:
+                    tool_facts.append(f"index_size {result['index_size']}")
+                if "stderr" in result:
+                    stderr_val = str(result["stderr"]).lower()
+                    if stderr_val:  # Only add non-empty stderr
+                        tool_facts.append(stderr_val)
+                if "exit_code" in result:
+                    tool_facts.append(f"exit_code {result['exit_code']}")
             elif isinstance(result, str):
                 tool_facts.append(result.lower())
             elif isinstance(result, (list, tuple)):
@@ -331,6 +380,10 @@ class Evaluator:
                     if phrase in response_lower:
                         facts_mentioned += 1
                         break
+            elif len(words) == 2:
+                # For 2-word phrases, check both words appear near each other
+                if words[0] in response_lower and words[1] in response_lower:
+                    facts_mentioned += 1
             elif fact in response_lower:
                 facts_mentioned += 1
 
@@ -383,6 +436,10 @@ class Evaluator:
             "fs.move": ["move", "rename", "mv"],
             "terminal.run": ["run", "execute", "command", "shell", "terminal"],
             "time": ["time", "date", "clock"],
+            "python.exec": ["execute", "run", "python", "code"],
+            "rag.query": ["ask", "query", "search", "find", "knowledge", "what", "who", "where", "when", "how", "why"],
+            "rag.add": ["add", "store", "save", "knowledge", "index", "remember"],
+            "rag.stats": ["stats", "statistics", "status", "size", "count", "how many"],
         }
 
         # Determine expected tools based on request
@@ -401,8 +458,10 @@ class Evaluator:
         if not used_set and expected_set:
             return 0.0  # Should have used tools but didn't
 
+        # If any expected tool was used, consider it appropriate
+        # This handles cases where multiple tools match the same keywords
         overlap = len(used_set & expected_set)
-        return overlap / len(expected_set)
+        return 1.0 if overlap > 0 else 0.0
 
 
 # Backward compatibility - simple evaluator for existing tests

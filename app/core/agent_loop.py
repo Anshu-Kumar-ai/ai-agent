@@ -122,7 +122,7 @@ class AgentLoop:
                     status_code=None,
                     error_type=type(e).__name__,
                     retry_count=0,
-                    timestamp=datetime.datetime.now(datetime.timezone.utc),
+                    timestamp=datetime.datetime.now(datetime.UTC),
                     recoverable=False,
                 )
                 self.provider_failures.append(pf)

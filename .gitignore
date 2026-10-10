@@ -1,5 +1,6 @@
 # Virtual environments
 .venv/
+.venv_clean/
 venv/
 env/
 .env
@@ -38,3 +39,37 @@ build/
 # Local development
 *.local.py
 local_settings.py
+
+# Hermes
+.hermes/
+
+# Temporary/test files
+*.txt
+!README.txt
+!requirements.txt
+!requirements-*.txt
+
+# Debug files
+debug_*.py
+test_*.py
+!tests/test_*.py
+
+# Coverage & reports
+*.md
+!README.md
+!CHANGELOG.md
+!CONTRIBUTING.md
+!LICENSE.md
+!*.md
+
+# Data files
+data/*.faiss
+data/*.json
+data/vector_index.faiss
+data/vector_metadata.json
+
+# Screenshots
+screenshots/
+
+# Secret files
+secret.txt

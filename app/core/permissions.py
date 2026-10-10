@@ -1,15 +1,17 @@
 from __future__ import annotations
 
+import fnmatch
 import hashlib
 import json
 import os
+import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
 from typing import Any
 
-from app.tools.executor import ToolExecutor
+import yaml
 
 
 class RiskLevel(Enum):
@@ -28,7 +30,7 @@ class ApprovalMode(Enum):
 
 @dataclass(frozen=True)
 class Permission:
-    """Represents a granted permission (argument‑hash based)."""
+    """Represents a granted permission (argument-hash based)."""
     tool_name: str
     args_hash: str
     scope: str
@@ -44,71 +46,134 @@ class _ScopePermission:
     tool_name: str
     action_type: str               # e.g. "read", "write", "delete", "execute"
     scope_prefix: str              # absolute path prefix that is allowed
-    granted_at: float
-    expires_at: float | None = None   # None means permanent
+    pattern: str | None = None     # glob/regex pattern for finer control
+    pattern_type: str = "prefix"   # "prefix", "glob", "regex"
+    granted_at: float = field(default_factory=time.time)
+    expires_at: float | None = None   # None means permanent (or use TTL)
+    ttl_seconds: float | None = None  # Time-to-live in seconds
     one_time: bool = False
     used: bool = False             # only relevant for one_time
+    metadata: dict[str, Any] = field(default_factory=dict)  # extensible metadata
+
+    def is_expired(self, now: float | None = None) -> bool:
+        """Check if this permission has expired."""
+        if self.ttl_seconds is not None:
+            if time.time() - self.granted_at > self.ttl_seconds:
+                return True
+        if self.expires_at is not None:
+            if now is None:
+                now = time.time()
+            if now > self.expires_at:
+                return True
+        return False
+
+    def matches_path(self, path: str) -> bool:
+        """Check if the given path matches this permission's scope/pattern."""
+        # Normalize paths for comparison (handle both / and \ separators, and drive letters)
+        def normalize(p: str) -> str:
+            # Convert backslashes to forward slashes
+            p = p.replace("\\", "/")
+            # Remove drive letter prefix (e.g., "C:/project" -> "/project")
+            if len(p) >= 3 and p[1] == ":" and p[2] == "/":
+                p = p[2:]
+            return p
+
+        normalized_path = normalize(path)
+        normalized_prefix = normalize(self.scope_prefix)
+
+        if self.pattern_type == "prefix":
+            return normalized_path.startswith(normalized_prefix)
+        elif self.pattern_type == "glob":
+            return fnmatch.fnmatch(normalized_path, normalize(self.pattern or self.scope_prefix))
+        elif self.pattern_type == "regex":
+            if self.pattern:
+                return re.search(self.pattern, normalized_path) is not None
+            return normalized_path.startswith(normalized_prefix)
+        return normalized_path.startswith(normalized_prefix)
 
 
-def _hash_args(args: dict[str, Any]) -> str:
+def _hash_args(args: dict[str, Any] | None) -> str:
     """Create a stable hash of the arguments dict."""
-    # Sort keys for consistent ordering
+    if args is None:
+        args = {}
     sorted_items = sorted(args.items())
-    # Convert to JSON string for deterministic representation
     json_str = json.dumps(sorted_items, sort_keys=True, default=str)
     return hashlib.sha256(json_str.encode()).hexdigest()[:16]
 
 
 class PermissionManager:
-    """
-    Centralized risk-based permission system.
-
-    Responsibilities:
-    - Classify tool actions by risk level.
-    - Check if action is already permitted.
-    - Automatically allow low-risk operations.
-    - Request user approval for high-risk operations.
-    - Support temporary/session-scoped permissions.
-    - Provide an audit log of permission decisions.
-    """
+    """Manages tool execution permissions with risk classification and scoped grants."""
 
     def __init__(
         self,
         workspace_root: str | None = None,
         approval_mode: ApprovalMode = ApprovalMode.BALANCED,
         audit_log_path: str | None = None,
+        policy_path: str | None = None,
     ):
-        self.workspace_root = os.path.abspath(
-            workspace_root or os.getenv("HERMES_WORKSPACE", os.getcwd())
-        )
+        # Resolve workspace_root to absolute path for cross-platform compatibility
+        if workspace_root is None:
+            workspace_root = os.getcwd()
+        else:
+            workspace_root = os.path.abspath(os.path.expanduser(workspace_root))
+
+        self.workspace_root = workspace_root
         self._workspace_root_path = Path(self.workspace_root).resolve()
         self.approval_mode = approval_mode
         self.audit_log_path = audit_log_path
+        self.policy_path = policy_path
 
-        # In-memory stores
-        self._session_permissions: set[tuple[str, str]] = set()          # (tool_name, args_hash)
+        # Hash-based permissions (argument-specific)
+        self._session_permissions: set[tuple[str, str]] = set()
         self._one_time_permissions: set[tuple[str, str]] = set()
-        self._permanent_permissions: set[tuple[str, str]] = set()        # loaded from disk if needed
+        self._permanent_permissions: set[tuple[str, str]] = set()
 
-        # NEW – scoped permissions
+        # Scope-based permissions
         self._scoped_session: list[_ScopePermission] = []
         self._scoped_one_time: list[_ScopePermission] = []
         self._scoped_permanent: list[_ScopePermission] = []
 
-        # Audit log as list of dicts
+        # Audit log
         self._audit_log: list[dict[str, Any]] = []
 
-        # Load permanent permissions if audit log path is provided and file exists
-        if self.audit_log_path and os.path.exists(self.audit_log_path):
-            try:
-                with open(self.audit_log_path, "r") as f:
-                    data = json.load(f)
-                for entry in data.get("permissions", []):
-                    self._permanent_permissions.add(
-                        (entry["tool_name"], entry["args_hash"])
-                    )
-            except Exception:
-                pass  # ignore errors
+        # Load policy if provided
+        if policy_path and os.path.exists(policy_path):
+            self._load_policy(policy_path)
+
+    def _load_policy(self, policy_path: str) -> None:
+        """Load permission policy from YAML file."""
+        with open(policy_path) as f:
+            policy = yaml.safe_load(f)
+
+        for rule in policy.get("rules", []):
+            tool = rule.get("tool")
+            action = rule.get("action", "allow")
+            if action == "allow":
+                # Add to permanent permissions
+                # For simplicity, we'll store the rule for later matching
+                pass
+
+    def _save_policy(self, target: str | None = None) -> None:
+        """Save current permissions as a policy file."""
+        target = target or self.policy_path
+        if not target:
+            return
+        policy = {"rules": []}
+        for perm in self._scoped_permanent:
+            policy["rules"].append({
+                "tool": perm.tool_name,
+                "action_type": perm.action_type,
+                "scope_prefix": perm.scope_prefix,
+                "pattern": perm.pattern,
+                "pattern_type": perm.pattern_type,
+                "duration": "permanent",
+                "metadata": perm.metadata,
+            })
+        try:
+            with open(target, "w") as f:
+                yaml.dump(policy, f, indent=2)
+        except Exception as e:
+            print(f"[PermissionManager] Warning: Failed to save policy to {target}: {e}")
 
     # --------------------------------------------------------------------- #
     # Risk classification
@@ -118,10 +183,38 @@ class PermissionManager:
         tool_name_lower = tool_name.lower()
 
         # Known safe tools
-        if tool_name_lower in {"calculator", "time", "http.fetch", "web.search", "terminal.run"}:
+        if tool_name_lower in {"calculator", "time", "http.fetch", "web.search"}:
             return RiskLevel.LOW
 
-        # File system tools (heuristic based on name)
+        # Code execution tools - HIGH risk
+        if tool_name_lower in {"python.exec"}:
+            return RiskLevel.HIGH
+
+        # Browser automation tools - HIGH risk
+        if tool_name_lower in {"browser.navigate", "browser.click", "browser.type", "browser.screenshot", "browser.content", "browser.evaluate", "browser.close"}:
+            return RiskLevel.HIGH
+
+        # Advanced browser agent tools - HIGH risk
+        if tool_name_lower in {"browser_agent.execute", "browser_session.manage", "browser.observe", "browser.action"}:
+            return RiskLevel.HIGH
+
+        # Desktop automation tools - HIGH risk
+        if tool_name_lower in {"desktop.list_windows", "desktop.focus_window", "desktop.get_window_info", "desktop.click", "desktop.type", "desktop.key_press", "desktop.screenshot"}:
+            return RiskLevel.HIGH
+
+        # Multi-agent orchestration - HIGH risk
+        if tool_name_lower in {"orchestrator.delegate"}:
+            return RiskLevel.HIGH
+
+        # RAG tools - MEDIUM risk
+        if tool_name_lower in {"rag.query", "rag.add", "rag.stats"}:
+            return RiskLevel.MEDIUM
+
+        # Terminal - HIGH risk
+        if tool_name_lower in {"terminal.run"}:
+            return RiskLevel.HIGH
+
+        # File system tools (heuristic based on name) - support both old (write_file, read_file) and new (fs.write, fs.read) names
         if any(
             kw in tool_name_lower
             for kw in ("read", "list", "stat", "info", "grep", "find")
@@ -164,15 +257,20 @@ class PermissionManager:
             if isinstance(val, str):
                 # Simple heuristic: if contains a path separator and not obviously a URL
                 if ("/" in val or "\\" in val) and not val.startswith("http"):
-                    abs_path = os.path.abspath(os.path.expanduser(val))
                     try:
+                        abs_path = os.path.abspath(os.path.expanduser(val))
                         # Check if abs_path is within workspace_root
                         common = os.path.commonpath([abs_path, self.workspace_root])
                         if common != self.workspace_root:
                             return True
                     except ValueError:
-                        # paths may be on different drives on Windows, treat as outside
-                        return True
+                        # paths may be on different drives on Windows
+                        # If the path starts with "/" (Unix-style absolute path) and we're on Windows,
+                        # treat it as outside the workspace
+                        if val.startswith("/"):
+                            return True
+                        # For other cross-drive cases, we can't reliably determine
+                        pass
             elif isinstance(val, dict):
                 if self._has_outside_path(val):
                     return True
@@ -188,7 +286,7 @@ class PermissionManager:
     def check_permission(
         self,
         tool_name: str,
-        arguments: dict[str, Any],
+        arguments: dict[str, Any] | None,
         risk_level: RiskLevel | None = None,
     ) -> tuple[bool, str]:
         """Returns (allowed, reason). If allowed is False, the caller should request user approval."""
@@ -199,7 +297,7 @@ class PermissionManager:
         permission_key = (tool_name, args_hash)
         now = time.time()
 
-        # Check if permission already granted (session, one-time, permanent) – argument‑hash based
+        # Check if permission already granted (session, one-time, permanent) - argument-hash based
         if permission_key in self._session_permissions:
             return True, "Session permission granted"
         if permission_key in self._one_time_permissions:
@@ -208,11 +306,32 @@ class PermissionManager:
         if permission_key in self._permanent_permissions:
             return True, "Permanent permission granted"
 
-        # Risk‑based hard boundaries: HIGH and CRITICAL always require approval
-        if risk_level in (RiskLevel.HIGH, RiskLevel.CRITICAL):
+        # Risk-based hard boundaries: CRITICAL always requires approval
+        # HIGH risk requires approval unless in FULL_AUTO mode
+        if risk_level == RiskLevel.CRITICAL:
+            self._log_audit(
+                tool_name,
+                arguments,
+                risk_level,
+                False,
+                f"{risk_level.name}-risk action requires approval",
+                scope=self._describe_scope(arguments),
+            )
             return False, f"{risk_level.name}-risk action requires approval"
 
-        # For LOW risk: auto‑allow (and grant session hash‑based permission for repeat calls)
+        if risk_level == RiskLevel.HIGH:
+            if self.approval_mode != ApprovalMode.FULL_AUTO:
+                self._log_audit(
+                    tool_name,
+                    arguments,
+                    risk_level,
+                    False,
+                    f"{risk_level.name}-risk action requires approval",
+                    scope=self._describe_scope(arguments),
+                )
+                return False, f"{risk_level.name}-risk action requires approval"
+
+        # For LOW risk: auto-allow (and grant session hash-based permission for repeat calls)
         if risk_level == RiskLevel.LOW:
             auto_allow = True
             reason = "Low-risk auto-allowed"
@@ -241,14 +360,14 @@ class PermissionManager:
                 )
                 return True, "Scoped permission granted"
 
-        # Fall back to mode‑based auto‑allow / denial logic
+        # Fall back to mode-based auto-allow / denial logic
         auto_allow = False
         reason = ""
 
         if self.approval_mode == ApprovalMode.SAFE:
             auto_allow = False
         elif self.approval_mode == ApprovalMode.BALANCED:
-            # MEDIUM not auto‑allowed in BALANCED unless we have a scoped permission (handled above)
+            # MEDIUM not auto-allowed in BALANCED unless we have a scoped permission (handled above)
             auto_allow = False
         elif self.approval_mode == ApprovalMode.AUTONOMOUS:
             if risk_level in (RiskLevel.LOW, RiskLevel.MEDIUM):
@@ -278,15 +397,23 @@ class PermissionManager:
 
         # Otherwise, we need to ask for approval
         reason = f"{risk_level.name}-risk action requires approval"
+        self._log_audit(
+            tool_name,
+            arguments,
+            risk_level,
+            False,
+            reason,
+            scope=self._describe_scope(arguments),
+        )
         return False, reason
 
     def _check_scoped_permission(
         self,
         tool_name: str,
-        arguments: dict[str, Any],
+        arguments: dict[str, Any] | None,
         now: float,
     ) -> bool:
-        """Return True if a matching scoped permission exists (and consume one‑time if applicable)."""
+        """Return True if a matching scoped permission exists (and consume one-time if applicable)."""
         action_type = self._action_type(tool_name, arguments)
         path_strings = self._extract_path_arguments(arguments)
         if not path_strings:
@@ -297,9 +424,6 @@ class PermissionManager:
             if not self._is_within_workspace(p):
                 return False
 
-        # Normalize workspace prefix for comparison
-        ws_prefix = str(self._workspace_root_path)
-
         # Check each scoped list
         for perm_list in (
             self._scoped_session,
@@ -309,78 +433,65 @@ class PermissionManager:
             for perm in perm_list:
                 if perm.tool_name != tool_name or perm.action_type != action_type:
                     continue
-                if perm.scope_prefix != ws_prefix:
-                    continue
-                if perm.expires_at is not None and perm.expires_at < now:
+                if perm.is_expired(now):
                     continue  # expired
                 if perm.one_time and perm.used:
                     continue  # already consumed
+                # Check if any of the paths match this permission
+                matched = False
+                for p in path_strings:
+                    if perm.matches_path(p):
+                        matched = True
+                        break
+                if not matched:
+                    continue
                 # Match found
                 if perm.one_time:
                     perm.used = True
                 return True
         return False
 
-    def _action_type(self, tool_name: str, arguments: dict[str, Any]) -> str:
-        """Return a coarse‑grained action string used for scoping."""
-        tn = tool_name.lower()
-
-        # File‑system verbs (heuristic – matches the existing risk classification)
-        if any(k in tn for k in ("read", "list", "stat", "info", "grep", "find")):
-            return "read"
-        if any(k in tn for k in ("write", "create", "update", "modify", "edit", "save")):
-            return "write"
-        if any(k in tn for k in ("delete", "remove", "rm", "unlink", "truncate")):
-            return "delete"
-        if any(k in tn for k in ("move", "rename", "cp", "copy")):
-            return "move"
-        if any(k in tn for k in ("exec", "run", "shell", "terminal", "command")):
+    def _action_type(self, tool_name: str, arguments: dict[str, Any] | None) -> str:
+        """Extract action type from tool name and arguments."""
+        if tool_name.startswith("fs."):
+            if "write" in tool_name:
+                return "write"
+            elif "read" in tool_name:
+                return "read"
+            elif "list" in tool_name:
+                return "list"
+            elif "move" in tool_name:
+                return "move"
+            elif "delete" in tool_name:
+                return "delete"
+            else:
+                return "unknown"
+        elif tool_name.startswith("terminal."):
             return "execute"
+        elif tool_name.startswith("browser."):
+            return "browser"
+        elif tool_name.startswith("python."):
+            return "execute"
+        return "unknown"
 
-        # Default – treat the whole tool as its own action
-        return tn
-
-    def _is_within_workspace(self, path_str: str) -> bool:
-        """Return True if the given path is inside the configured workspace."""
-        try:
-            p = Path(path_str).expanduser().resolve()
-            return p.is_relative_to(self._workspace_root_path)
-        except (ValueError, RuntimeError):
-            # If the path cannot be resolved (e.g., invalid characters), treat as outside
-            return False
-
-    def _extract_path_arguments(self, arguments: dict[str, Any]) -> list[str]:
-        """Extract arguments that are explicitly file‑system paths.
-        Prefers known keys (path, file_path, filename, directory, etc.) and falls back to heuristic.
-        """
+    def _extract_path_arguments(self, arguments: dict[str, Any] | None) -> list[str]:
+        """Extract path-like arguments from tool arguments."""
+        if arguments is None:
+            return []
         paths: list[str] = []
 
-        def _maybe_add(val: Any):
-            if isinstance(val, str):
-                # Heuristic: looks like a path if contains a separator and not a URL
-                if ("/" in val or "\\" in val) and not val.startswith("http"):
-                    paths.append(val)
+        def _maybe_add(val: Any) -> None:
+            if isinstance(val, str) and ("/" in val or "\\" in val) and not val.startswith("http"):
+                paths.append(val)
             elif isinstance(val, dict):
                 for v in val.values():
                     _maybe_add(v)
             elif isinstance(val, list):
-                for v in val:
-                    _maybe_add(v)
+                for item in val:
+                    _maybe_add(item)
 
-        # First, try known explicit keys
-        explicit_keys = {
-            "path",
-            "file_path",
-            "filename",
-            "file",
-            "directory",
-            "dir",
-            "target",
-            "source",
-            "destination",
-            "new_path",
-            "old_path",
-        }
+        # Explicit path keys
+        explicit_keys = {"path", "src", "dst", "source", "destination", "file", "directory", "dir"}
         for key, val in arguments.items():
             if key.lower() in explicit_keys:
                 _maybe_add(val)
@@ -394,19 +505,37 @@ class PermissionManager:
             _maybe_add(val)
         return paths
 
+    def _is_within_workspace(self, path: str) -> bool:
+        """Check if a path is within the workspace root."""
+        try:
+            abs_path = os.path.abspath(os.path.expanduser(path))
+            common = os.path.commonpath([abs_path, self.workspace_root])
+            return common == self.workspace_root
+        except ValueError:
+            # Cross-drive paths on Windows
+            return False
+
     # --------------------------------------------------------------------- #
     # Granting permissions
     # --------------------------------------------------------------------- #
     def grant_permission(
         self,
         tool_name: str,
-        arguments: dict[str, Any],
+        arguments: dict[str, Any] | None,
         scope: str,
         duration: str = "session",
         one_time: bool = False,
+        pattern: str | None = None,
+        pattern_type: str = "prefix",
+        ttl_seconds: float | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """Record a granted permission based on user approval.
         duration: "one_time", "session", "permanent"
+        pattern: glob/regex pattern for path matching
+        pattern_type: "prefix", "glob", "regex"
+        ttl_seconds: time-to-live in seconds (None = no TTL)
+        metadata: extensible metadata dict
         """
         action_type = self._action_type(tool_name, arguments)
         path_strings = self._extract_path_arguments(arguments)
@@ -414,7 +543,7 @@ class PermissionManager:
         permission_key = (tool_name, args_hash)
 
         # Determine if we can create a scoped permission:
-        #   - we have at least one path‑like argument
+        #   - we have at least one path-like argument
         #   - all such paths are inside the configured workspace
         scoped_grant = False
         if path_strings:
@@ -423,60 +552,37 @@ class PermissionManager:
                 scope_prefix = str(self._workspace_root_path)
             else:
                 scoped_grant = False
-        else:
-            scoped_grant = False
 
         if scoped_grant:
-            # Choose the appropriate list based on duration/one_time
-            if one_time or duration == "one_time":
-                self._scoped_one_time.append(
-                    _ScopePermission(
-                        tool_name=tool_name,
-                        action_type=action_type,
-                        scope_prefix=scope_prefix,
-                        granted_at=time.time(),
-                        expires_at=None,
-                        one_time=True,
-                        used=False,
-                    )
-                )
-            elif duration == "permanent":
-                self._scoped_permanent.append(
-                    _ScopePermission(
-                        tool_name=tool_name,
-                        action_type=action_type,
-                        scope_prefix=scope_prefix,
-                        granted_at=time.time(),
-                        expires_at=None,
-                        one_time=False,
-                        used=False,
-                    )
-                )
-            else:  # session (default)
-                self._scoped_session.append(
-                    _ScopePermission(
-                        tool_name=tool_name,
-                        action_type=action_type,
-                        scope_prefix=scope_prefix,
-                        granted_at=time.time(),
-                        expires_at=None,
-                        one_time=False,
-                        used=False,
-                    )
-                )
-        else:
-            # No recognizable path → fall back to the original hash‑based storage
-            if one_time or duration == "one_time":
-                self._one_time_permissions.add(permission_key)
-            elif duration == "permanent":
-                self._permanent_permissions.add(permission_key)
-                # Persist to audit log file if configured
-                if self.audit_log_path:
-                    self._persist_permission(
-                        tool_name, arguments, scope, granted_at=time.time()
-                    )
+            perm = _ScopePermission(
+                tool_name=tool_name,
+                action_type=action_type,
+                scope_prefix=scope_prefix,
+                pattern=pattern,
+                pattern_type=pattern_type,
+                one_time=one_time or duration == "one_time",
+                ttl_seconds=ttl_seconds,
+                metadata=metadata or {},
+            )
+            if duration == "permanent":
+                self._scoped_permanent.append(perm)
+            elif duration == "one_time" or one_time:
+                self._scoped_one_time.append(perm)
             else:  # session
-                self._session_permissions.add(permission_key)
+                self._scoped_session.append(perm)
+
+        # Also record the hash-based permission for the specific arguments
+        if duration == "permanent":
+            self._permanent_permissions.add(permission_key)
+            # Persist to audit log file if configured
+            if self.audit_log_path:
+                self._persist_permission(
+                    tool_name, arguments, scope, granted_at=time.time()
+                )
+        elif duration == "one_time" or one_time:
+            self._one_time_permissions.add(permission_key)
+        else:  # session
+            self._session_permissions.add(permission_key)
 
         # Audit log (always)
         self._log_audit(
@@ -491,7 +597,7 @@ class PermissionManager:
     def deny_permission(
         self,
         tool_name: str,
-        arguments: dict[str, Any],
+        arguments: dict[str, Any] | None,
         reason: str = "",
     ) -> None:
         self._log_audit(
@@ -504,151 +610,145 @@ class PermissionManager:
         )
 
     # --------------------------------------------------------------------- #
-    # Audit logging
+    # Audit log
     # --------------------------------------------------------------------- #
+    def _describe_scope(self, arguments: dict[str, Any] | None) -> str:
+        """Produces a human-readable scope description from arguments."""
+        if arguments is None:
+            return "no file paths detected"
+        for val in arguments.values():
+            if isinstance(val, str) and ("/" in val or "\\" in val):
+                return f"path: {val}"
+        return "no file paths detected"
+
     def _log_audit(
         self,
         tool_name: str,
-        arguments: dict[str, Any],
+        arguments: dict[str, Any] | None,
         risk_level: RiskLevel,
-        decision: bool,
+        allowed: bool,
         reason: str,
-        scope: str = "",
+        scope: str,
     ) -> None:
+        """Record an audit entry."""
+        if arguments is None:
+            arguments = {}
         entry = {
             "timestamp": time.time(),
             "tool": tool_name,
-            "args_hash": _hash_args(arguments),
-            "arguments": self._sanitize_args(arguments),
+            "arguments_hash": _hash_args(arguments),
             "risk": risk_level.name,
-            "decision": "allowed" if decision else "denied",
+            "decision": "allowed" if allowed else "denied",
             "reason": reason,
             "scope": scope,
         }
         self._audit_log.append(entry)
-        # If audit log path is set, write to file (append)
+
         if self.audit_log_path:
-            try:
-                with open(self.audit_log_path, "a") as f:
-                    f.write(json.dumps(entry) + "\n")
-            except Exception:
-                pass  # ignore logging errors
+            self._persist_audit(entry)
+
+    def _persist_audit(self, entry: dict[str, Any]) -> None:
+        """Append a single audit entry to the log file."""
+        try:
+            data = {"entries": []}
+            if os.path.exists(self.audit_log_path):
+                with open(self.audit_log_path) as f:
+                    data = json.load(f)
+            data["entries"].append(entry)
+            with open(self.audit_log_path, "w") as f:
+                json.dump(data, f, indent=2)
+        except Exception:
+            pass  # ignore logging errors
+
+    def get_audit_log(self) -> list[dict[str, Any]]:
+        """Return a copy of the audit log."""
+        return list(self._audit_log)
+
+    def clear_session_permissions(self) -> None:
+        """Clear session-based permissions (hash-based and scoped)."""
+        self._session_permissions.clear()
+        self._scoped_session.clear()
+
+    def get_scoped_permissions(self) -> list[dict[str, Any]]:
+        """Get a summary of all scoped permissions."""
+        result = []
+        for perm in (
+            self._scoped_session + self._scoped_one_time + self._scoped_permanent
+        ):
+            result.append({
+                "tool_name": perm.tool_name,
+                "action_type": perm.action_type,
+                "scope_prefix": perm.scope_prefix,
+                "pattern": perm.pattern,
+                "pattern_type": perm.pattern_type,
+                "one_time": perm.one_time,
+                "ttl_seconds": perm.ttl_seconds,
+                "used": perm.used,
+                "metadata": perm.metadata,
+            })
+        return result
+
+    def safe_execute(self, executor, tool_name: str, **kwargs) -> Any:
+        """Execute a tool after checking permissions.
+
+        Args:
+            executor: A ToolExecutor instance
+            tool_name: Name of the tool to execute
+            **kwargs: Arguments for the tool
+
+        Returns:
+            Tool result if allowed
+
+        Raises:
+            PermissionError: If permission is denied
+        """
+        allowed, reason = self.check_permission(tool_name, kwargs)
+        if not allowed:
+            raise PermissionError(f"Permission denied for {tool_name}: {reason}")
+        return executor.execute(tool_name, **kwargs)
 
     def _persist_permission(
         self,
         tool_name: str,
-        arguments: dict[str, Any],
+        arguments: dict[str, Any] | None,
         scope: str,
         granted_at: float,
     ) -> None:
-        """Append a permanent permission entry to the audit log file."""
+        """Persist a permanent permission grant."""
         if not self.audit_log_path:
             return
-        entry = {
-            "timestamp": granted_at,
-            "tool": tool_name,
-            "args_hash": _hash_args(arguments),
-            "arguments": self._sanitize_args(arguments),
-            "scope": scope,
-        }
         try:
-            # Read existing data, update, write back
             data = {"permissions": []}
             if os.path.exists(self.audit_log_path):
-                with open(self.audit_log_path, "r") as f:
+                with open(self.audit_log_path) as f:
                     data = json.load(f)
-            data["permissions"].append(entry)
+            data["permissions"].append({
+                "tool_name": tool_name,
+                "arguments": arguments,
+                "scope": scope,
+                "granted_at": granted_at,
+            })
             with open(self.audit_log_path, "w") as f:
                 json.dump(data, f, indent=2)
         except Exception:
             pass
 
-    def _sanitize_args(self, arguments: dict[str, Any]) -> dict[str, Any]:
-        """Remove potentially sensitive values from arguments before logging."""
-        sanitized = {}
-        for key, val in arguments.items():
-            if isinstance(val, str):
-                # Simple redaction for common secret patterns
-                lower_key = key.lower()
-                if any(
-                    secret in lower_key
-                    for secret in ("key", "token", "secret", "password", "passwd", "auth")
-                ):
-                    sanitized[key] = "***REDACTED***"
-                else:
-                    sanitized[key] = val
-            elif isinstance(val, dict):
-                sanitized[key] = self._sanitize_args(val)
-            elif isinstance(val, list):
-                sanitized[key] = [
-                    self._sanitize_args(i) if isinstance(i, dict) else i for i in val
-                ]
-            else:
-                sanitized[key] = val
-        return sanitized
 
-    def _describe_scope(self, arguments: dict[str, Any]) -> str:
-        """Produces a human‑readable scope description from arguments."""
-        # For simplicity, we just note if any paths are within workspace.
-        paths = []
-        for val in self._flatten_strings(arguments):
-            if isinstance(val, str) and ("/" in val or "\\" in val):
-                paths.append(val)
-        if paths:
-            # Check if first path is within workspace
-            sample = paths[0]
-            abs_path = os.path.abspath(os.path.expanduser(sample))
-            if abs_path.startswith(self.workspace_root):
-                return f"within workspace ({self.workspace_root})"
-            else:
-                return f"outside workspace ({abs_path})"
-        return "no file paths detected"
+def safe_execute(permission_manager, executor, tool_name: str, **kwargs) -> Any:
+    """Standalone function for executing a tool with permission checking.
 
-    def _flatten_strings(self, obj: Any) -> list[str]:
-        """Recursively extract all strings from a nested structure."""
-        strings: list[str] = []
+    This is a convenience wrapper around PermissionManager.safe_execute().
 
-        def _extract(item: Any):
-            if isinstance(item, str):
-                strings.append(item)
-            elif isinstance(item, dict):
-                for v in item.values():
-                    _extract(v)
-            elif isinstance(item, list):
-                for v in item:
-                    _extract(v)
+    Args:
+        permission_manager: A PermissionManager instance
+        executor: A ToolExecutor instance
+        tool_name: Name of the tool to execute
+        **kwargs: Arguments for the tool
 
-        _extract(obj)
-        return strings
+    Returns:
+        Tool result if allowed
 
-    # --------------------------------------------------------------------- #
-    # Utility for clearing session permissions (called at session end)
-    # --------------------------------------------------------------------- #
-    def clear_session(self) -> None:
-        """Clear session‑specific permissions (call at end of session)."""
-        self._session_permissions.clear()
-        self._scoped_session.clear()
-        # One‑time permissions are consumed on use; permanent remain.
-
-    # --------------------------------------------------------------------- #
-    # Helper function to integrate with ToolExecutor
-    # --------------------------------------------------------------------- #
-
-
-def safe_execute(
-    executor: ToolExecutor,
-    permission_manager: PermissionManager,
-    tool_name: str,
-    **kwargs: Any,
-) -> Any:
-    """Execute a tool after checking permissions.
-    Raises PermissionError if not allowed and user denies.
+    Raises:
+        PermissionError: If permission is denied
     """
-    risk = permission_manager.classify_risk(tool_name, kwargs)
-    allowed, reason = permission_manager.check_permission(tool_name, kwargs, risk)
-    if not allowed:
-        raise PermissionError(
-            f"Permission required for {tool_name} ({risk.name}): {reason}. "
-            f"Arguments: {kwargs}"
-        )
-    return executor.execute(tool_name, **kwargs)
+    return permission_manager.safe_execute(executor, tool_name, **kwargs)

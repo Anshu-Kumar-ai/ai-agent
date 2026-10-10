@@ -51,7 +51,7 @@ class TimeToolTests(unittest.TestCase):
         self.assertEqual(plan.action, "respond")
 
     def test_agent_registers_and_uses_time_tool(self):
-        agent = Agent()
+        agent = Agent(planner=Planner())
 
         result = agent.run("What time is it?")
         timestamp = datetime.fromisoformat(result)

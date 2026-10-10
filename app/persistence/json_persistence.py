@@ -47,6 +47,6 @@ def save_state(orchestrator: Orchestrator, filepath: str | Path) -> None:
 
 def load_state(orchestrator: Orchestrator, filepath: str | Path) -> None:
     """Load the orchestrator's state from a JSON file."""
-    with open(filepath, "r", encoding="utf-8") as f:
+    with open(filepath, encoding="utf-8") as f:
         state = json.load(f)
     _restore_state(orchestrator, state)

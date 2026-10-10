@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 from app.core.agent import Agent
 from app.core.agent_loop import AgentLoop
-from app.core.planner import Plan
+from app.core.planner import Plan, Planner
 from app.memory.enhanced import EnhancedMemory
 from app.tools.calculator import CalculatorTool
 from app.tools.executor import ToolExecutor
@@ -38,7 +38,7 @@ class AgentEnhancedMemoryTests(unittest.TestCase):
 
     def test_agent_stores_tool_observations_automatically(self):
         """Tool observations should be stored after each tool execution."""
-        agent = Agent()
+        agent = Agent(planner=Planner())
 
         agent.run("What is 25 * 4 + 10?")
 
@@ -50,7 +50,7 @@ class AgentEnhancedMemoryTests(unittest.TestCase):
 
     def test_agent_stores_reflection_after_tool_execution(self):
         """Agent should add a reflection evaluating the tool result."""
-        agent = Agent()
+        agent = Agent(planner=Planner())
 
         agent.run("What is 25 * 4 + 10?")
 
@@ -61,7 +61,7 @@ class AgentEnhancedMemoryTests(unittest.TestCase):
 
     def test_agent_context_includes_observations_and_reflections(self):
         """Subsequent requests should see previous observations and reflections in context."""
-        agent = Agent()
+        agent = Agent(planner=Planner())
 
         # First request
         agent.run("What is 25 * 4 + 10?")
@@ -71,10 +71,10 @@ class AgentEnhancedMemoryTests(unittest.TestCase):
         # Also mock evaluator to return high score to avoid retries
         original_evaluator = agent.evaluator
         from app.core.evaluation import Evaluation
-        
+
         mock_evaluation = Evaluation(score=1.0, feedback="All criteria met.", criteria_met=["all"], criteria_not_met=[])
         agent.evaluator.evaluate = lambda *args, **kwargs: mock_evaluation
-        
+
         try:
             with patch.object(agent.planner, "plan", side_effect=[
                 Plan(action="use_tool", tool_name="calculator", arguments={"expression": "25 * 4 + 10"}, reason="Calculate"),

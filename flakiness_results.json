@@ -1,0 +1,22 @@
+{
+  "TestDesktopValidation::test_click_notepad_edit_control": {
+    "runs": 10,
+    "passes": 9,
+    "failures": 1,
+    "pass_rate": 0.9,
+    "failure_details": [
+      {
+        "run": 6,
+        "stdout": "ktop - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html\n    @pytest.mark.desktop\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n=========================== short test summary info ===========================\nFAILED tests/test_desktop_validation.py::TestDesktopValidation::test_click_notepad_edit_control\n======================= 1 failed, 33 warnings in 3.05s ========================\n",
+        "stderr": ""
+      }
+    ]
+  },
+  "TestDesktopValidation::test_multi_window_isolation": {
+    "runs": 10,
+    "passes": 10,
+    "failures": 0,
+    "pass_rate": 1.0,
+    "failure_details": []
+  }
+}

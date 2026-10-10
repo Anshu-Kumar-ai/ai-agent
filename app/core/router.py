@@ -3,18 +3,20 @@ import time
 from pathlib import Path
 
 from app.core.gateway import ModelGateway
+from app.core.providers import ProviderType, get_provider_manager
 
 
 class SmartRouter:
-    def __init__(self):
-        self.gateway = ModelGateway()
+    def __init__(self, provider_manager=None):
+        self.provider_manager = provider_manager or get_provider_manager()
+        self.gateway = ModelGateway(provider_manager=self.provider_manager)
 
         self.priority_profiles = {
-            "general": ["gemini", "groq", "openrouter"],
-            "coding": ["groq", "gemini", "openrouter"],
-            "reasoning": ["gemini", "groq", "openrouter"],
-            "creative": ["gemini", "openrouter", "groq"],
-            "local": ["local"],
+            "general": [ProviderType.GEMINI, ProviderType.GROQ, ProviderType.OPENROUTER, ProviderType.LOCAL],
+            "coding": [ProviderType.GROQ, ProviderType.GEMINI, ProviderType.OPENROUTER, ProviderType.LOCAL],
+            "reasoning": [ProviderType.GEMINI, ProviderType.GROQ, ProviderType.OPENROUTER, ProviderType.LOCAL],
+            "creative": [ProviderType.GEMINI, ProviderType.OPENROUTER, ProviderType.GROQ, ProviderType.LOCAL],
+            "local": [ProviderType.LOCAL],
         }
 
         self.keyword_profiles = {
@@ -51,7 +53,7 @@ class SmartRouter:
 
     def _default_stats(self) -> dict:
         return {
-            provider: {
+            provider.value: {
                 "requests": 0,
                 "successes": 0,
                 "failures": 0,
@@ -59,7 +61,7 @@ class SmartRouter:
                 "health_ema": 0.5,
                 "latency_ema": 0.0,
             }
-            for provider in self.gateway.models
+            for provider in ProviderType
         }
 
     def _load_stats(self) -> dict:
@@ -76,7 +78,6 @@ class SmartRouter:
             for provider in defaults:
                 if provider not in data:
                     data[provider] = defaults[provider]
-
                 for key in defaults[provider]:
                     if key not in data[provider]:
                         data[provider][key] = defaults[provider][key]
@@ -140,6 +141,16 @@ class SmartRouter:
         return best_profile
 
     def _is_available(self, provider: str) -> bool:
+        """Check if provider is available (has API key and not in cooldown)."""
+        # First check if provider has API key configured
+        try:
+            provider_type = ProviderType(provider)
+            if not self.provider_manager.is_available(provider_type):
+                return False
+        except ValueError:
+            pass
+
+        # Then check cooldown
         cooldown_until = self.cooldowns.get(provider)
 
         if cooldown_until is None:
@@ -261,7 +272,7 @@ class SmartRouter:
 
     def _select_priority(self, message: str) -> list[str]:
         profile = self._classify(message)
-        base_priority = self.priority_profiles[profile]
+        base_priority = self.provider_manager.get_priority_list(profile)
         health = self.get_health_scores()
 
         task_scores = {
@@ -276,7 +287,7 @@ class SmartRouter:
 
         for provider in base_priority:
             task_score = task_scores[provider] * 50.0
-            health_score = health[provider] * 0.50
+            health_score = health.get(provider.value, 50.0) * 0.50
 
             scores[provider] = (
                 task_score
@@ -315,49 +326,58 @@ class SmartRouter:
         print(f"[Router] Task type: {profile}")
         print(
             f"[Router] Health-aware priority: "
-            f"{' ? '.join(priority)}"
+            f"{' ? '.join(p.value for p in priority)}"
         )
 
         errors = []
 
         for provider in priority:
-            if not self._is_available(provider):
-                print(f"[Router] Skipping cooldown: {provider}")
+            if not self._is_available(provider.value):
+                print(f"[Router] Skipping unavailable: {provider.value}")
                 continue
 
             start = time.perf_counter()
 
             try:
-                print(f"[Router] Trying: {provider}")
+                print(f"[Router] Trying: {provider.value}")
 
                 response = self.gateway.ask(
-                    provider,
+                    provider.value,
                     model_message,
                 )
 
                 latency = time.perf_counter() - start
-                self._record_success(provider, latency)
+                self._record_success(provider.value, latency)
 
                 print(
-                    f"[Router] Success: {provider} "
+                    f"[Router] Success: {provider.value} "
                     f"({latency:.3f}s)"
                 )
 
-                self.cooldowns.pop(provider, None)
+                self.cooldowns.pop(provider.value, None)
 
                 return response
 
             except Exception as error:
                 latency = time.perf_counter() - start
-                self._record_failure(provider, latency)
+                self._record_failure(provider.value, latency)
 
                 print(
-                    f"[Router] Failed: {provider} "
+                    f"[Router] Failed: {provider.value} "
                     f"({latency:.3f}s)"
                 )
 
-                self._mark_failed(provider)
-                errors.append(f"{provider}: {error}")
+                self._mark_failed(provider.value)
+                errors.append(f"{provider.value}: {error}")
+
+        # Fall back to local if all providers failed
+        if ProviderType.LOCAL not in priority:
+            print("[Router] Falling back to local...")
+            try:
+                response = self.gateway.ask(ProviderType.LOCAL.value, model_message)
+                return response
+            except Exception as e:
+                errors.append(f"local: {e}")
 
         raise RuntimeError(
             "All available AI providers failed:\n"

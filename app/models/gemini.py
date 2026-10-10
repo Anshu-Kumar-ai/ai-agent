@@ -1,8 +1,8 @@
-import os
 
 from dotenv import load_dotenv
 from openai import OpenAI
 
+from app.core.providers import ProviderType, get_provider_manager
 from app.models.base import BaseModel
 
 load_dotenv()
@@ -13,16 +13,15 @@ class GeminiModel(BaseModel):
     provider = "gemini"
 
     def __init__(self):
-        api_key = os.getenv("GEMINI_API_KEY")
-
-        if not api_key:
-            raise RuntimeError(
-                "GEMINI_API_KEY is not configured in .env"
-            )
+        # Check API key via provider manager
+        pm = get_provider_manager()
+        config = pm.get_config(ProviderType.GEMINI)
+        if not config or not config.enabled:
+            raise RuntimeError("Gemini API key not configured")
 
         self.client = OpenAI(
-            api_key=api_key,
-            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+            api_key=config.api_key,
+            base_url=config.base_url,
         )
 
     def chat(self, message: str) -> str:
