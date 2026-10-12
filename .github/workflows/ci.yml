@@ -42,7 +42,6 @@ jobs:
 
     - name: Run unit tests (verified release test suites)
       run: |
-        ls -la test_security_remediation.py test_mm_assurance.py test_change_workflows.py test_repair_workflows.py test_repair_loop.py app/persistence/test_execution_journal.py
         python -m pytest test_security_remediation.py test_mm_assurance.py test_change_workflows.py test_repair_workflows.py test_repair_loop.py app/persistence/test_execution_journal.py -v --tb=short --timeout=30
       env:
         MOCK_LLM_PROVIDERS: "true"
