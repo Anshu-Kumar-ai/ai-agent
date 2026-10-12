@@ -25,6 +25,15 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Debug - List files
+      run: |
+        pwd
+        ls -la
+        ls -la test_*.py 2>/dev/null || echo "No test_*.py files found in root"
+        ls -la app/persistence/test_execution_journal.py 2>/dev/null || echo "No app/persistence/test_execution_journal.py found"
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
