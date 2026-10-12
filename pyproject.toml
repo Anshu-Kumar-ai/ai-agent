@@ -101,6 +101,12 @@ ignore = [
     "F401",  # unused imports in test files
     "F811",  # redefinition of unused in test files
     "F841",  # local variable assigned but never used in test files
+    "UP035",  # typing.List deprecated in test files
+    "UP006",  # use dict/list instead of Dict/List in test files
+    "B904",  # raise from err in test files
+    "B905",  # zip without strict in test files
+    "F402",  # shadowed import in test files
+    "PIE790",  # unnecessary pass in test files
 ]
 exclude = [".venv", "build", "dist", "__pycache__"]
 
