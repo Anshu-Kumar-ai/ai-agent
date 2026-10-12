@@ -22,7 +22,7 @@ def has_api_keys():
 )
 class TestLiveProvider:
     """Tests that require live LLM providers."""
-    
+
     def test_gemini_planning(self):
         """Test Gemini provider planning."""
         import os
@@ -33,7 +33,7 @@ class TestLiveProvider:
         result = agent.run("What is 2+2?")
         assert result is not None
         assert len(result) > 0
-    
+
     def test_groq_planning(self):
         """Test Groq provider planning."""
         import os
@@ -44,7 +44,7 @@ class TestLiveProvider:
         result = agent.run("What is 3+3?")
         assert result is not None
         assert len(result) > 0
-    
+
     def test_openrouter_planning(self):
         """Test OpenRouter provider planning."""
         import os
@@ -55,7 +55,7 @@ class TestLiveProvider:
         result = agent.run("What is 4+4?")
         assert result is not None
         assert len(result) > 0
-    
+
     def test_provider_fallback(self):
         """Test provider fallback with real providers."""
         import os

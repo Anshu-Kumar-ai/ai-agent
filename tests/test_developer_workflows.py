@@ -142,7 +142,7 @@ class TestDeveloperWorkflows(unittest.TestCase):
                 # (In real execution, these would come from skill inputs)
                 for param in workflow.parameters:
                     produced.add(param.name)
-            
+
                 for step in workflow.workflow:
                     # Each required output must have been produced by a previous step OR be a skill parameter
                     for req in step.requires:
