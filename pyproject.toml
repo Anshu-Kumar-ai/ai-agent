@@ -96,6 +96,11 @@ ignore = [
     "B008",  # function calls in default arguments
     "T201",  # print statements in demo/test scripts
     "B011",  # assert False in test helpers
+    "B007",  # unused loop control variable in test files
+    "I001",  # import block un-sorted in test files
+    "F401",  # unused imports in test files
+    "F811",  # redefinition of unused in test files
+    "F841",  # local variable assigned but never used in test files
 ]
 exclude = [".venv", "build", "dist", "__pycache__"]
 
