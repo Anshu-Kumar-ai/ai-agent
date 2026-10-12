@@ -91,6 +91,8 @@ select = [
 ignore = [
     "E501",  # line too long (handled by line-length)
     "B008",  # function calls in default arguments
+    "T201",  # print statements in demo/test scripts
+    "B011",  # assert False in test helpers
 ]
 exclude = [".venv", "build", "dist", "__pycache__"]
 
