@@ -15,6 +15,8 @@ import hashlib
 import json
 import signal
 import psutil
+import time
+import threading
 from pathlib import Path
 
 from app.extensions.dynamic_tools import (
@@ -29,6 +31,7 @@ from app.extensions.dynamic_tools import (
 from app.extensions.change_proposal import (
     ValidationStep,
     is_command_allowed,
+    split_allowed_command,
     validate_workspace_path,
     compute_file_hash,
 )
@@ -60,6 +63,21 @@ class ValidationRequest:
     expected_result: ValidationStatus = ValidationStatus.PASSED
     cancellation_token: Optional[Any] = None
     created_at: datetime = field(default_factory=datetime.now)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "validation_id": self.validation_id,
+            "task_id": self.task_id,
+            "workspace_root": self.workspace_root,
+            "approved_command": self.approved_command,
+            "target_paths": self.target_paths,
+            "timeout_seconds": self.timeout_seconds,
+            "max_output_size": self.max_output_size,
+            "max_retry_count": self.max_retry_count,
+            "expected_result": self.expected_result.value,
+            "cancellation_token": self.cancellation_token,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
 @dataclass
 class ValidationResult:
     """Result of validation execution."""
@@ -156,7 +174,7 @@ class ValidationTool(ToolInterface):
         # Validate input arguments
         if "validation_request" not in arguments:
             raise ValueError("Missing validation_request in arguments")
-        
+
         # Convert dict to ValidationRequest
         req_data = arguments["validation_request"]
         # Convert expected_result string to ValidationStatus enum if it's a string
@@ -167,10 +185,10 @@ class ValidationTool(ToolInterface):
                 # If it's not a valid status, set to ERROR
                 req_data["expected_result"] = ValidationStatus.ERROR
         validation_request = ValidationRequest(**req_data)
-        
+
         # Execute the validation
         result = self._execute_validation(validation_request)
-        
+
         # Return structured result
         return {"validation_result": self._result_to_dict(result)}
 
@@ -178,14 +196,120 @@ class ValidationTool(ToolInterface):
         """Check if validation tool is available."""
         return True  # Always available if dependencies are met
 
-    def _execute_validation(self, request: ValidationRequest) -> ValidationResult:
-        """Execute a bounded validation command."""
-        start_time = datetime.utcnow()
+    def _execute_validation(self, request: ValidationRequest, cancellation_token: Optional[callable] = None) -> ValidationResult:
+        """Execute a bounded validation command with retry support."""
+        start_time = time.monotonic()
+        overall_deadline = start_time + request.timeout_seconds * (request.max_retry_count + 1)
+
+        # Classify retryable statuses
+        RETRYABLE_STATUSES = {ValidationStatus.TIMED_OUT, ValidationStatus.ERROR}
+        NON_RETRYABLE_STATUSES = {ValidationStatus.REJECTED, ValidationStatus.CANCELLED}
+
+        last_result = None
+        max_attempts = request.max_retry_count + 1
+
+        for attempt in range(max_attempts):
+            # Check cancellation before each attempt
+            if cancellation_token and callable(cancellation_token):
+                if cancellation_token():
+                    return ValidationResult(
+                        validation_id=request.validation_id,
+                        task_id=request.task_id,
+                        status=ValidationStatus.CANCELLED,
+                        validation_request=request,
+                        stderr="Validation cancelled by caller",
+                        duration_seconds=time.monotonic() - start_time,
+                    )
+
+            # Check overall deadline
+            if time.monotonic() >= overall_deadline:
+                return ValidationResult(
+                    validation_id=request.validation_id,
+                    task_id=request.task_id,
+                    status=ValidationStatus.TIMED_OUT,
+                    validation_request=request,
+                    stderr=f"Overall deadline exceeded after {request.max_retry_count + 1} attempts",
+                    duration_seconds=time.monotonic() - start_time,
+                )
+
+            # Calculate remaining time for this attempt
+            remaining_time = overall_deadline - time.monotonic()
+            if remaining_time <= 0:
+                return ValidationResult(
+                    validation_id=request.validation_id,
+                    task_id=request.task_id,
+                    status=ValidationStatus.TIMED_OUT,
+                    validation_request=request,
+                    stderr="Overall deadline exceeded",
+                    duration_seconds=time.monotonic() - start_time,
+                )
+
+            attempt_timeout = min(request.timeout_seconds, remaining_time)
+
+            # Execute single attempt
+            result = self._execute_single_attempt(
+                request, attempt_timeout, cancellation_token, start_time
+            )
+
+            last_result = result
+
+            # Check if we should retry
+            if result.status in NON_RETRYABLE_STATUSES:
+                # Non-retryable - return immediately
+                return result
+
+            if result.status in RETRYABLE_STATUSES:
+                if attempt < max_attempts - 1:
+                    # Wait before retry with exponential backoff
+                    backoff = min(2 ** attempt, 30)  # Cap at 30 seconds
+                    backoff = min(backoff, overall_deadline - time.monotonic())
+                    if backoff > 0:
+                        # Wait with cancellation checks
+                        wait_start = time.monotonic()
+                        while time.monotonic() - wait_start < backoff:
+                            if cancellation_token and callable(cancellation_token):
+                                if cancellation_token():
+                                    return ValidationResult(
+                                        validation_id=request.validation_id,
+                                        task_id=request.task_id,
+                                        status=ValidationStatus.CANCELLED,
+                                        validation_request=request,
+                                        stderr="Validation cancelled during backoff",
+                                        duration_seconds=time.monotonic() - start_time,
+                                    )
+                            time.sleep(0.1)
+                        continue
+                    else:
+                        # Last attempt, return result
+                        return result
+
+            # If PASSED or FAILED (expected), return
+            if result.status in {ValidationStatus.PASSED, ValidationStatus.FAILED}:
+                return result
+
+        # Exhausted all attempts
+        return last_result or ValidationResult(
+            validation_id=request.validation_id,
+            task_id=request.task_id,
+            status=ValidationStatus.ERROR,
+            validation_request=request,
+            stderr="Retry loop exhausted without result",
+            duration_seconds=time.monotonic() - start_time,
+        )
+
+    def _execute_single_attempt(
+        self,
+        request: ValidationRequest,
+        attempt_timeout: float,
+        cancellation_token: Optional[callable],
+        start_time: float,
+    ) -> ValidationResult:
+        """Execute a single validation attempt."""
         result = ValidationResult(
             validation_id=request.validation_id,
             task_id=request.task_id,
-            status=ValidationStatus.ERROR,  # Default to error, will be updated
-            validation_request=request
+            status=ValidationStatus.ERROR,
+            validation_request=request,
         )
 
         try:
@@ -212,16 +336,13 @@ class ValidationTool(ToolInterface):
 
             # 4. Check permissions
             if self.permission_manager:
-                # In a real implementation, we would check specific validation permissions
-                # For now, we'll assume the permission manager handles this through its normal flow
                 pass
 
             # 5. Execute command with bounds
             env = os.environ.copy()
-            # Limit environment to prevent leakage
             safe_env = {
-                k: v for k, v in env.items() 
-                if not any(sensitive in k.lower() for sensitive in 
+                k: v for k, v in env.items()
+                if not any(sensitive in k.lower() for sensitive in
                           ['key', 'token', 'secret', 'password', 'auth', 'credential'])
             }
             safe_env.update({
@@ -229,88 +350,149 @@ class ValidationTool(ToolInterface):
                 'HOME': os.environ.get('HOME', ''),
                 'USER': os.environ.get('USER', ''),
                 'LANG': os.environ.get('LANG', 'C.UTF-8'),
-                'LC_ALL': os.environ.get('LC_ALL', 'C.UTF-8')
+                'LC_ALL': os.environ.get('LC_ALL', 'C.UTF-8'),
             })
 
             # Prepare process
             proc = None
             try:
-                # Use Popen for better control over timeout and output bounding
+                # Use split_allowed_command for safe argument parsing
+                argv = split_allowed_command(request.approved_command)
+                if argv is None:
+                    result.status = ValidationStatus.REJECTED
+                    result.stderr = f"Command not in validation allowlist: {request.approved_command}"
+                    return result
+
                 proc = subprocess.Popen(
-                    request.approved_command.split(),
+                    argv,
                     cwd=request.workspace_root,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
                     env=safe_env,
-                    bufsize=1,  # Line buffered
-                    universal_newlines=True
+                    bufsize=1,
+                    universal_newlines=True,
                 )
 
-                # Monitor output with size bounding
-                stdout_lines = []
-                stderr_lines = []
-                stdout_truncated = False
-                stderr_truncated = False
+                # Monitor output with size bounding using fixed-size byte chunks
+                stdout_chunks = []
+                stderr_chunks = []
+                stdout_bytes_ref = [0]
+                stderr_bytes_ref = [0]
+                stdout_truncated = [False]
+                stderr_truncated = [False]
 
-                def read_output(pipe, lines_list, max_size, truncated_flag):
-                    """Read output from pipe with size bounding."""
-                    size_so_far = 0
+                def read_output_bytes(pipe, chunks_list, bytes_count_ref, max_size, truncated_flag):
+                    """Read output in fixed-size byte chunks, enforcing byte limit."""
+                    # Use binary mode reading via the buffer if available
+                    import io
+                    if hasattr(pipe, 'buffer'):
+                        # TextIOWrapper - read from binary buffer
+                        bin_pipe = pipe.buffer
+                    else:
+                        # Already binary or file-like
+                        bin_pipe = pipe
+                    chunk_size = 4096  # 4KB chunks
                     try:
-                        for line in iter(pipe.readline, ''):
-                            lines_list.append(line)
-                            size_so_far += len(line.encode('utf-8'))
-                            if size_so_far >= max_size:
+                        while True:
+                            chunk = bin_pipe.read(chunk_size)
+                            if not chunk:
+                                break
+                            current = bytes_count_ref[0]
+                            remaining = max_size - current
+                            if remaining <= 0:
+                                # Limit already reached, discard this chunk
                                 truncated_flag[0] = True
-                                # Consume remaining output without storing
-                                for _ in pipe:
+                                # Keep reading to drain the pipe
+                                continue
+                            if len(chunk) <= remaining:
+                                # Fits entirely
+                                chunks_list.append(chunk)
+                                bytes_count_ref[0] = current + len(chunk)
+                            else:
+                                # Truncate chunk to fit
+                                chunks_list.append(chunk[:remaining])
+                                bytes_count_ref[0] = max_size
+                                truncated_flag[0] = True
+                                # Drain remaining data
+                                for _ in bin_pipe:
+                                    pass
+                                break
+                            # Check if we have reached limit exactly
+                            if bytes_count_ref[0] >= max_size:
+                                truncated_flag[0] = True
+                                for _ in bin_pipe:
                                     pass
                                 break
                     except Exception:
+                        # On any read error, stop reading
                         pass
 
-                # Use threads to read stdout and stderr concurrently
-                import threading
-                stdout_truncated_flag = [False]
-                stderr_truncated_flag = [False]
-                
                 stdout_thread = threading.Thread(
-                    target=read_output, 
-                    args=(proc.stdout, stdout_lines, request.max_output_size // 2, stdout_truncated_flag)
+                    target=read_output_bytes,
+                    args=(proc.stdout, stdout_chunks, stdout_bytes_ref, request.max_output_size // 2, stdout_truncated)
                 )
                 stderr_thread = threading.Thread(
-                    target=read_output, 
-                    args=(proc.stderr, stderr_lines, request.max_output_size // 2, stderr_truncated_flag)
+                    target=read_output_bytes,
+                    args=(proc.stderr, stderr_chunks, stderr_bytes_ref, request.max_output_size // 2, stderr_truncated)
                 )
-                
+                # Start the output reader threads
                 stdout_thread.start()
                 stderr_thread.start()
 
-                # Wait for completion with timeout
+                # Wait for completion with timeout and cancellation support
+                deadline = time.monotonic() + attempt_timeout
                 try:
-                    proc.wait(timeout=request.timeout_seconds)
-                    stdout_thread.join(timeout=5)
-                    stderr_thread.join(timeout=5)
+                    while True:
+                        # Check for cancellation
+                        if cancellation_token and callable(cancellation_token):
+                            if cancellation_token():
+                                result.status = ValidationStatus.CANCELLED
+                                cancel_msg = "Validation cancelled by caller"
+                                result.stderr = cancel_msg
+                                result.stdout = b''.join(stdout_chunks).decode('utf-8', errors='replace')
+                                if stderr_chunks:
+                                    captured_stderr = b''.join(stderr_chunks).decode('utf-8', errors='replace')
+                                    if captured_stderr:
+                                        result.stderr += '\n' + captured_stderr
+                                result.truncated = stdout_truncated[0] or stderr_truncated[0]
+                                result.duration_seconds = time.monotonic() - start_time
+                                return result
+
+                        # Check deadline
+                        if time.monotonic() >= deadline:
+                            raise subprocess.TimeoutExpired(cmd='', timeout=attempt_timeout)
+
+                        try:
+                            proc.wait(timeout=0.1)
+                            stdout_thread.join(timeout=5)
+                            stderr_thread.join(timeout=5)
+                            break
+                        except subprocess.TimeoutExpired:
+                            continue
                 except subprocess.TimeoutExpired:
-                    # Timeout exceeded
                     result.status = ValidationStatus.TIMED_OUT
-                    # Try to terminate the process tree
                     self._terminate_process_tree(proc.pid)
-                    result.stderr = f"Validation timed out after {request.timeout_seconds} seconds"
-                    result.stdout = ''.join(stdout_lines)
-                    result.stderr += ''.join(stderr_lines)
-                    result.truncated = stdout_truncated_flag[0] or stderr_truncated_flag[0]
-                    result.duration_seconds = (datetime.utcnow() - start_time).total_seconds()
+                    timeout_msg = f"Validation timed out after {attempt_timeout:.1f} seconds"
+                    result.stderr = timeout_msg
+                    result.stdout = b''.join(stdout_chunks).decode('utf-8', errors='replace')
+                    if stderr_chunks:
+                        captured_stderr = b''.join(stderr_chunks).decode('utf-8', errors='replace')
+                        if captured_stderr:
+                            result.stderr += '\n' + captured_stderr
+                    result.truncated = stdout_truncated[0] or stderr_truncated[0]
+                    result.duration_seconds = time.monotonic() - start_time
                     return result
 
                 # Get final output
-                stdout_content = ''.join(stdout_lines)
-                stderr_content = ''.join(stderr_lines)
+                stdout_content = b''.join(stdout_chunks).decode('utf-8', errors='replace')
+                stderr_content = b''.join(stderr_chunks).decode('utf-8', errors='replace')
                 result.stdout = stdout_content
                 result.stderr = stderr_content
-                result.truncated = stdout_truncated_flag[0] or stderr_truncated_flag[0]
+                result.truncated = stdout_truncated[0] or stderr_truncated[0]
                 result.exit_code = proc.returncode
-                result.duration_seconds = (datetime.utcnow() - start_time).total_seconds()
+                result.duration_seconds = time.monotonic() - start_time
+
 
                 # Determine status based on exit code and expected result
                 if proc.returncode == 0:
@@ -320,7 +502,6 @@ class ValidationTool(ToolInterface):
 
                 # Check if result matches expected
                 if result.status != request.expected_result:
-                    # Note this in diagnostics but don't change status - the actual result is what matters
                     result.sanitized_diagnostics = f"Expected {request.expected_result.value}, got {result.status.value}"
 
                 # Parse test output if it looks like test results
@@ -333,7 +514,7 @@ class ValidationTool(ToolInterface):
             except Exception as e:
                 result.status = ValidationStatus.ERROR
                 result.stderr = f"Validation execution error: {str(e)}"
-                result.duration_seconds = (datetime.utcnow() - start_time).total_seconds()
+                result.duration_seconds = time.monotonic() - start_time
                 if proc and proc.poll() is None:
                     self._terminate_process_tree(proc.pid)
                 return result
@@ -341,9 +522,8 @@ class ValidationTool(ToolInterface):
         except Exception as e:
             result.status = ValidationStatus.ERROR
             result.stderr = f"Validation setup error: {str(e)}"
-            result.duration_seconds = (datetime.utcnow() - start_time).total_seconds()
+            result.duration_seconds = time.monotonic() - start_time
             return result
-
     def _terminate_process_tree(self, pid: int):
         """Terminate a process and its children."""
         try:
@@ -362,10 +542,10 @@ class ValidationTool(ToolInterface):
         """Parse test counts from output."""
         counts = {"passed": 0, "failed": 0, "skipped": 0, "errors": 0}
         combined = stdout + stderr
-        
+
         # Look for common test result patterns
         import re
-        
+
         # pytest style: "=== 5 passed, 2 failed, 1 skipped in 0.12s ==="
         pytest_match = re.search(r'(\d+)\s+passed[^\d]*(\d+)\s+failed[^\d]*(\d+)\s+skipped', combined, re.IGNORECASE)
         if pytest_match:
@@ -373,7 +553,7 @@ class ValidationTool(ToolInterface):
             counts["failed"] = int(pytest_match.group(2))
             counts["skipped"] = int(pytest_match.group(3))
             return counts
-            
+
         # unittest style: "Ran 5 tests in 0.001s\n\nOK" or "FAILED (failures=2, errors=1)"
         if "OK" in combined and "FAILED" not in combined:
             # Extract number of tests from "Ran X tests"
@@ -389,18 +569,18 @@ class ValidationTool(ToolInterface):
                 counts["failed"] = int(failure_match.group(1)) if failure_match else 0
                 counts["errors"] = int(error_match.group(1)) if error_match else 0
                 counts["passed"] = total - counts["failed"] - counts["errors"]
-                
+
         return counts
 
     def _parse_structured_failures(self, stdout: str, stderr: str) -> List[Dict[str, Any]]:
         """Parse structured failure information."""
         failures = []
         combined = stdout + stderr
-        
+
         # Extract failure details from tracebacks or assertion errors
         lines = combined.split('\n')
         current_failure = {}
-        
+
         for i, line in enumerate(lines):
             if "FAILED" in line or "AssertionError" in line or line.strip().startswith("E   "):
                 # Start of a failure
@@ -417,17 +597,17 @@ class ValidationTool(ToolInterface):
                 current_failure = {}
             elif current_failure:
                 current_failure["raw"] = current_failure.get("raw", "") + "\n" + line.strip()
-                
+
         if current_failure:
             failures.append(current_failure)
-            
+
         return failures[:10]  # Limit to prevent excessive output
 
     def _sanitize_diagnostics(self, stdout: str, stderr: str) -> str:
         """Sanitize diagnostic output by removing sensitive information."""
         # Remove potential secrets, tokens, keys
         import re
-        
+
         # Patterns for common secret formats
         patterns = [
             (r'[a-zA-Z0-9_-]{20,}', '[REDACTED_TOKEN]'),  # Long alphanumeric strings (tokens/keys)
@@ -436,21 +616,21 @@ class ValidationTool(ToolInterface):
             (r'AKIA[0-9A-Z]{16}', '[REDACTED_AWS_KEY]'),  # AWS access key pattern
             (r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', '[REDACTED_UUID]'),  # UUIDs
         ]
-        
+
         sanitized_stdout = stdout
         sanitized_stderr = stderr
-        
+
         for pattern, replacement in patterns:
             sanitized_stdout = re.sub(pattern, replacement, sanitized_stdout, flags=re.IGNORECASE)
             sanitized_stderr = re.sub(pattern, replacement, sanitized_stderr, flags=re.IGNORECASE)
-            
+
         # Truncate if too large
         max_size = 2000
         if len(sanitized_stdout) > max_size:
             sanitized_stdout = sanitized_stdout[:max_size//2] + "\n... [TRUNCATED] ...\n" + sanitized_stdout[-max_size//2:]
         if len(sanitized_stderr) > max_size:
             sanitized_stderr = sanitized_stderr[:max_size//2] + "\n... [TRUNCATED] ...\n" + sanitized_stderr[-max_size//2:]
-            
+
         return f"STDOUT: {sanitized_stdout}\nSTDERR: {sanitized_stderr}"
 
     def _result_to_dict(self, result: ValidationResult) -> Dict[str, Any]:

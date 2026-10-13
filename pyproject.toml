@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ai-agent"
-version = "0.1.0"
+version = "0.1.1"
 description = "A general-purpose PC automation AI agent with planning, memory, tool execution, evaluation-driven improvement, and multi-provider LLM routing."
 readme = "README.md"
 license = {text = "MIT"}
@@ -24,6 +24,11 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "rich>=15.0.0",
     "pygments>=2.21.0",
+    "pyyaml>=6.0.1",
+    "numpy>=1.24.0",
+    "sentence-transformers>=2.2.0",
+    "psutil>=5.9.0",
+    "jsonschema>=4.17.0",
 ]
 
 [project.optional-dependencies]
@@ -68,6 +73,8 @@ markers = [
     "integration: marks tests as integration tests requiring external services",
     "slow: marks tests as slow running",
     "unit: marks tests as unit tests",
+    "desktop: marks tests requiring desktop automation",
+    "live_provider: marks tests requiring live LLM provider (may hit rate limits/quota)",
 ]
 timeout = 60
 
@@ -88,6 +95,25 @@ select = [
 ignore = [
     "E501",  # line too long (handled by line-length)
     "B008",  # function calls in default arguments
+    "T201",  # print statements in demo/test scripts
+    "B011",  # assert False in test helpers
+    "B007",  # unused loop control variable in test files
+    "I001",  # import block un-sorted in test files
+    "F401",  # unused imports in test files
+    "F811",  # redefinition of unused in test files
+    "F841",  # local variable assigned but never used in test files
+    "UP035",  # typing.List deprecated in test files
+    "UP006",  # use dict/list instead of Dict/List in test files
+    "B904",  # raise from err in test files
+    "B905",  # zip without strict in test files
+    "F402",  # shadowed import in test files
+    "PIE790",  # unnecessary pass in test files
+    "B015",  # pointless comparison in app/tools
+    "W293",  # blank line contains whitespace in app/tools
+    "F541",  # f-string without placeholders in app/tools
+    "PIE810",  # call startswith once with tuple in app/tools
+    "W291",  # trailing whitespace in app/tools
+    "UP022",  # prefer capture_output in app/tools
 ]
 exclude = [".venv", "build", "dist", "__pycache__"]
 

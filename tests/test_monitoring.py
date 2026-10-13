@@ -51,7 +51,7 @@ class TestMonitoringEvents:
             model="gemini-pro",
             metadata={"key": "value"}
         )
-        
+
         assert event.event_type == EventType.TASK_STARTED.value
         assert event.task_id == "test123"
         assert event.provider == "gemini"
@@ -68,7 +68,7 @@ class TestMonitoringEvents:
             duration_ms=150.5,
             success=True
         )
-        
+
         event_dict = event.to_dict()
         assert event_dict["event_type"] == EventType.TASK_COMPLETED.value
         assert event_dict["task_id"] == "test123"
@@ -90,7 +90,7 @@ class TestMonitoringEvents:
             "error_type": None,
             "metadata": {"key": "value"}
         }
-        
+
         event = MonitorEvent.from_dict(data)
         assert event.event_id == "test-id"
         assert event.event_type == EventType.TASK_STARTED.value
@@ -120,20 +120,20 @@ class TestMonitoringEvents:
                 {"normal": "also_visible"}
             ]
         }
-        
+
         clean = sanitize_metadata(dirty_metadata)
-        
+
         # Check top-level redactions
         assert clean["api_key"] == "[REDACTED]"
         assert clean["authorization"] == "[REDACTED]"
         assert clean["normal_field"] == "visible"
-        
+
         # Check nested redactions
         assert clean["nested"]["password"] == "[REDACTED]"
         assert clean["nested"]["data"] == "visible"
         assert clean["nested"]["deep"]["secret"] == "[REDACTED]"
         assert clean["nested"]["deep"]["public"] == "see_me"
-        
+
         # Check list redactions
         assert clean["list_of_dicts"][0]["api_key"] == "[REDACTED]"
         assert clean["list_of_dicts"][0]["name"] == "visible"
@@ -143,7 +143,7 @@ class TestMonitoringEvents:
         """Test that long strings are truncated."""
         long_string = "x" * 600
         metadata = {"description": long_string, "normal": "short"}
-        
+
         clean = sanitize_metadata(metadata)
         assert len(clean["description"]) <= 200 + len("... [TRUNCATED]")
         assert clean["description"].endswith("... [TRUNCATED]")
@@ -165,14 +165,14 @@ class TestMonitoringStore:
         store, db_path = self._make_store()
         try:
             assert store.db_path == db_path
-            
+
             # Test that we can insert and query
             event = create_event(
                 event_type=EventType.TASK_STARTED,
                 task_id="test123"
             )
             store.insert_event(event)
-            
+
             events = store.query_events()
             assert len(events) == 1
             assert events[0].task_id == "test123"
@@ -187,7 +187,7 @@ class TestMonitoringStore:
         try:
             now = datetime.utcnow()
             hour_ago = now - timedelta(hours=1)
-            
+
             event1 = create_event(
                 event_type=EventType.TASK_STARTED,
                 task_id="task1",
@@ -208,31 +208,31 @@ class TestMonitoringStore:
                 provider="groq",
                 timestamp=hour_ago.isoformat() + "Z"
             )
-            
+
             store.insert_event(event1)
             store.insert_event(event2)
             store.insert_event(event3)
-            
+
             # Query all events
             all_events = store.query_events()
             assert len(all_events) == 3
-            
+
             # Query by task_id
             task1_events = store.query_events(task_id="task1")
             assert len(task1_events) == 2
-            
+
             # Query by provider
             gemini_events = store.query_events(provider="gemini")
             assert len(gemini_events) == 2
-            
+
             # Query by event_type
             started_events = store.query_events(event_type=EventType.TASK_STARTED.value)
             assert len(started_events) == 2
-            
+
             # Query by time range
             recent_events = store.query_events(start_time=now - timedelta(minutes=30))
             assert len(recent_events) == 2  # task1 events
-            
+
             # Test limit and offset
             limited = store.query_events(limit=2)
             assert len(limited) == 2
@@ -246,7 +246,7 @@ class TestMonitoringStore:
         store, db_path = self._make_store()
         try:
             now = datetime.utcnow()
-            
+
             # Insert provider events
             events = [
                 # Gemini requests and successes
@@ -261,12 +261,12 @@ class TestMonitoringStore:
                 create_event(EventType.PROVIDER_FALLBACK, provider="gemini", model="groq", timestamp=now.isoformat() + "Z"),
                 create_event(EventType.PROVIDER_COOLDOWN, provider="groq", timestamp=now.isoformat() + "Z"),
             ]
-            
+
             for event in events:
                 store.insert_event(event)
-            
+
             stats = store.get_provider_stats()
-            
+
             # Check Gemini stats
             gemini = stats["gemini"]
             assert gemini["requests"] == 2
@@ -274,7 +274,7 @@ class TestMonitoringStore:
             assert gemini["failures"] == 1
             assert gemini["success_rate"] == 0.5
             assert gemini["average_latency_ms"] == 100.0  # Only success has duration
-            
+
             # Check Groq stats
             groq = stats["groq"]
             assert groq["requests"] == 1
@@ -282,7 +282,7 @@ class TestMonitoringStore:
             assert groq["failures"] == 0
             assert groq["success_rate"] == 1.0
             assert groq["average_latency_ms"] == 200.0
-            
+
             # Check aggregated counts
             assert stats["_fallback_count"] == 1
             assert stats["_cooldown_count"] == 1
@@ -296,7 +296,7 @@ class TestMonitoringStore:
         store, db_path = self._make_store()
         try:
             now = datetime.utcnow()
-            
+
             # Insert tool events
             events = [
                 # Calculator tool
@@ -308,12 +308,12 @@ class TestMonitoringStore:
                 create_event(EventType.TOOL_STARTED, tool="time", timestamp=now.isoformat() + "Z"),
                 create_event(EventType.TOOL_COMPLETED, tool="time", duration_ms=100.0, success=True, timestamp=now.isoformat() + "Z"),
             ]
-            
+
             for event in events:
                 store.insert_event(event)
-            
+
             stats = store.get_tool_stats()
-            
+
             # Check calculator stats
             calc = stats["calculator"]
             assert calc["invocations"] == 2
@@ -321,7 +321,7 @@ class TestMonitoringStore:
             assert calc["failures"] == 1
             assert calc["failure_rate"] == 0.5
             assert calc["average_latency_ms"] == 7.5  # Average of 10.0 (success) and 5.0 (failure)
-            
+
             # Check time stats
             time_tool = stats["time"]
             assert time_tool["invocations"] == 1
@@ -339,7 +339,7 @@ class TestMonitoringStore:
         store, db_path = self._make_store()
         try:
             now = datetime.utcnow()
-            
+
             # Insert permission events
             events = [
                 create_event(EventType.PERMISSION_REQUESTED, tool="fs.write", timestamp=now.isoformat() + "Z"),
@@ -351,12 +351,12 @@ class TestMonitoringStore:
                 create_event(EventType.PERMISSION_REQUESTED, tool="fs.write", timestamp=now.isoformat() + "Z"),
                 create_event(EventType.PERMISSION_DENIED, tool="fs.write", timestamp=now.isoformat() + "Z"),
             ]
-            
+
             for event in events:
                 store.insert_event(event)
-            
+
             stats = store.get_permission_stats()
-            
+
             assert stats["requested"] == 4
             assert stats["granted"] == 2
             assert stats["denied"] == 2
@@ -370,11 +370,11 @@ class TestMonitoringStore:
         store, db_path = self._make_store()
         try:
             now = datetime.utcnow()
-            
+
             # Insert task events for task1 (completed)
             task1_start = now - timedelta(seconds=30)
             task1_end = now - timedelta(seconds=10)
-            
+
             events = [
                 create_event(EventType.TASK_STARTED, task_id="task1", timestamp=task1_start.isoformat() + "Z"),
                 create_event(EventType.AGENT_LOOP_ITERATION, task_id="task1", timestamp=(task1_start + timedelta(seconds=5)).isoformat() + "Z"),
@@ -385,12 +385,12 @@ class TestMonitoringStore:
                 create_event(EventType.AGENT_LOOP_ITERATION, task_id="task2", timestamp=(now + timedelta(seconds=2)).isoformat() + "Z"),
                 create_event(EventType.TASK_FAILED, task_id="task2", duration_ms=5000.0, success=False, error_type="tool_failed", timestamp=(now + timedelta(seconds=5)).isoformat() + "Z"),
             ]
-            
+
             for event in events:
                 store.insert_event(event)
-            
+
             stats = store.get_task_stats()
-            
+
             assert stats["total_started"] == 2
             assert stats["completed"] == 1
             assert stats["failed"] == 1
@@ -408,7 +408,7 @@ class TestMonitoringStore:
         store, db_path = self._make_store()
         try:
             now = datetime.utcnow()
-            
+
             # Insert various events
             events = [
                 create_event(EventType.TASK_STARTED, task_id="task1", timestamp=now.isoformat() + "Z"),
@@ -422,18 +422,18 @@ class TestMonitoringStore:
                 create_event(EventType.PERMISSION_REQUESTED, tool="fs.write", timestamp=now.isoformat() + "Z"),
                 create_event(EventType.PERMISSION_GRANTED, tool="fs.write", timestamp=now.isoformat() + "Z"),
             ]
-            
+
             for event in events:
                 store.insert_event(event)
-            
+
             overview = store.get_overview()
-            
+
             assert overview["total_events"] == 10
             assert overview["unique_tasks"] == 1
             assert overview["task_success_rate"] == 1.0
             assert overview["average_task_duration_ms"] == 1000.0
             assert overview["permission_approval_rate"] == 1.0
-            
+
             # Check provider health
             provider_health = overview["provider_health"]
             assert "gemini" in provider_health
@@ -442,7 +442,7 @@ class TestMonitoringStore:
             assert "groq" in provider_health
             assert provider_health["groq"]["success_rate"] == 0.0
             assert provider_health["groq"]["status"] == "unavailable"
-            
+
             # Check active provider (should be gemini with more requests)
             # In case of tie, gemini should be selected (it was inserted first)
             active_provider = overview["active_provider"]
@@ -461,7 +461,7 @@ class TestMonitoringStore:
             now = datetime.utcnow()
             old_time = now - timedelta(days=10)
             recent_time = now - timedelta(hours=1)
-            
+
             # Insert old and recent events
             old_event = create_event(
                 event_type=EventType.TASK_STARTED,
@@ -473,19 +473,19 @@ class TestMonitoringStore:
                 task_id="recent_task",
                 timestamp=recent_time.isoformat() + "Z"
             )
-            
+
             store.insert_event(old_event)
             store.insert_event(recent_event)
-            
+
             # Verify both events exist
             all_events = store.query_events()
             assert len(all_events) == 2
-            
+
             # Cleanup events older than 5 days
             cutoff = now - timedelta(days=5)
             deleted_count = store.cleanup_old_events(cutoff)
             assert deleted_count == 1  # Only the old event should be deleted
-            
+
             # Verify only recent event remains
             remaining_events = store.query_events()
             assert len(remaining_events) == 1
@@ -500,7 +500,7 @@ class TestMonitoringStore:
         store, db_path = self._make_store()
         try:
             assert store.get_event_count() == 0
-            
+
             # Insert some events
             for i in range(5):
                 event = create_event(
@@ -508,7 +508,7 @@ class TestMonitoringStore:
                     task_id=f"task{i}"
                 )
                 store.insert_event(event)
-            
+
             assert store.get_event_count() == 5
         finally:
             store.close()
@@ -538,13 +538,13 @@ class TestMonitoringEmitter:
                 provider="gemini",
                 metadata={"test": "value"}
             )
-            
+
             assert event is not None
             assert event.event_type == EventType.TASK_STARTED.value
             assert event.task_id == "test123"
             assert event.provider == "gemini"
             assert event.metadata["test"] == "value"
-            
+
             # Verify it was stored
             events = store.query_events()
             assert len(events) == 1
@@ -559,14 +559,14 @@ class TestMonitoringEmitter:
         store, emitter, db_path = self._make_store_and_emitter()
         try:
             emitter.enabled = False
-            
+
             event = emitter.emit(
                 event_type=EventType.TASK_STARTED,
                 task_id="test123"
             )
-            
+
             assert event is None
-            
+
             # Verify nothing was stored
             events = store.query_events()
             assert len(events) == 0
@@ -587,13 +587,13 @@ class TestMonitoringEmitter:
             ):
                 # Simulate some work
                 time.sleep(0.01)  # 10ms
-            
+
             # Should have two events: start and completion
             events = store.query_events(event_type=EventType.TOOL_STARTED)
             assert len(events) == 1
             assert events[0].tool == "calculator"
             assert events[0].task_id == "test123"
-            
+
             events = store.query_events(event_type=EventType.TOOL_COMPLETED)
             assert len(events) == 1
             assert events[0].tool == "calculator"
@@ -618,12 +618,12 @@ class TestMonitoringEmitter:
                     task_id="test123"
                 ):
                     raise ValueError("Test error")
-            
+
             # Should have start and failure events
             start_events = store.query_events(event_type=EventType.TOOL_STARTED)
             assert len(start_events) == 1
             assert start_events[0].tool == "calculator"
-            
+
             fail_events = store.query_events(event_type=EventType.TOOL_FAILED)
             assert len(fail_events) == 1
             assert fail_events[0].tool == "calculator"
@@ -643,25 +643,25 @@ class TestMonitoringEmitter:
             class FailingStore:
                 def insert_event(self, event):
                     raise Exception("Database failure")
-            
+
             # Emitter with failing store should still return None but not raise
             failing_emitter = EventEmitter(store=FailingStore())
             result = failing_emitter.emit(
                 event_type=EventType.TASK_STARTED,
                 task_id="test123"
             )
-            
+
             assert result is None  # Should return None on failure
-            
+
             # Real emitter should still work
             real_result = emitter.emit(
                 event_type=EventType.TASK_STARTED,
                 task_id="test456"
             )
-            
+
             assert real_result is not None
             assert real_result.task_id == "test456"
-            
+
             # Verify the good event was stored
             events = store.query_events()
             assert len(events) == 1
@@ -695,14 +695,14 @@ class TestConvenienceFunctions:
             assert start_event.event_type == EventType.TASK_STARTED.value
             assert start_event.task_id == "task123"
             assert "Test task" in start_event.metadata.get("message_preview", "")
-            
+
             complete_event = emit_task_completed("task123", 1500.0)
             assert complete_event is not None
             assert complete_event.event_type == EventType.TASK_COMPLETED.value
             assert complete_event.task_id == "task123"
             assert complete_event.duration_ms == 1500.0
             assert complete_event.success is True
-            
+
             failed_event = emit_task_failed("task456", 800.0, "TimeoutError")
             assert failed_event is not None
             assert failed_event.event_type == EventType.TASK_FAILED.value
@@ -710,7 +710,7 @@ class TestConvenienceFunctions:
             assert failed_event.duration_ms == 800.0
             assert failed_event.success is False
             assert failed_event.error_type == "TimeoutError"
-            
+
             # Verify all events stored
             events = store.query_events()
             assert len(events) == 3
@@ -729,7 +729,7 @@ class TestConvenienceFunctions:
             assert request_event.event_type == EventType.PROVIDER_REQUEST.value
             assert request_event.provider == "gemini"
             assert request_event.model == "gemini-pro"
-            
+
             success_event = emit_provider_success("gemini", "gemini-pro", 200.0, task_id="task123")
             assert success_event is not None
             assert success_event.event_type == EventType.PROVIDER_SUCCESS.value
@@ -737,7 +737,7 @@ class TestConvenienceFunctions:
             assert success_event.model == "gemini-pro"
             assert success_event.duration_ms == 200.0
             assert success_event.success is True
-            
+
             failure_event = emit_provider_failure("groq", "mixtral", 100.0, "RateLimitError", task_id="task123")
             assert failure_event is not None
             assert failure_event.event_type == EventType.PROVIDER_FAILURE.value
@@ -746,14 +746,14 @@ class TestConvenienceFunctions:
             assert failure_event.duration_ms == 100.0
             assert failure_event.success is False
             assert failure_event.error_type == "RateLimitError"
-            
+
             fallback_event = emit_provider_fallback("gemini", "groq", task_id="task123")
             assert fallback_event is not None
             assert fallback_event.event_type == EventType.PROVIDER_FALLBACK.value
             assert fallback_event.provider == "gemini"
             # Note: fallback event puts the target provider in model field
             assert fallback_event.model == "groq"
-            
+
             # Verify all events stored
             events = store.query_events()
             assert len(events) == 4  # request + success + failure + fallback = 4
@@ -771,14 +771,14 @@ class TestConvenienceFunctions:
             assert start_event is not None
             assert start_event.event_type == EventType.TOOL_STARTED.value
             assert start_event.tool == "calculator"
-            
+
             complete_event = emit_tool_completed("calculator", 15.0, task_id="task123")
             assert complete_event is not None
             assert complete_event.event_type == EventType.TOOL_COMPLETED.value
             assert complete_event.tool == "calculator"
             assert complete_event.duration_ms == 15.0
             assert complete_event.success is True
-            
+
             failed_event = emit_tool_failed("terminal", 50.0, "PermissionDenied", task_id="task123")
             assert failed_event is not None
             assert failed_event.event_type == EventType.TOOL_FAILED.value
@@ -786,7 +786,7 @@ class TestConvenienceFunctions:
             assert failed_event.duration_ms == 50.0
             assert failed_event.success is False
             assert failed_event.error_type == "PermissionDenied"
-            
+
             # Verify all events stored
             events = store.query_events()
             assert len(events) == 3
@@ -805,19 +805,19 @@ class TestConvenienceFunctions:
             assert requested_event.event_type == EventType.PERMISSION_REQUESTED.value
             assert requested_event.tool == "fs.write"
             assert requested_event.metadata.get("risk_level") == "HIGH"
-            
+
             granted_event = emit_permission_granted("fs.write", task_id="task123")
             assert granted_event is not None
             assert granted_event.event_type == EventType.PERMISSION_GRANTED.value
             assert granted_event.tool == "fs.write"
             assert granted_event.success is True
-            
+
             denied_event = emit_permission_denied("terminal", task_id="task123")
             assert denied_event is not None
             assert denied_event.event_type == EventType.PERMISSION_DENIED.value
             assert denied_event.tool == "terminal"
             assert denied_event.success is False
-            
+
             # Verify all events stored
             events = store.query_events()
             assert len(events) == 3
@@ -836,32 +836,32 @@ class TestConvenienceFunctions:
             assert memory_event.event_type == EventType.MEMORY_WRITE.value
             assert memory_event.tool == "tool_observation"
             assert memory_event.metadata.get("tool") == "calculator"
-            
+
             attempt_event = emit_attempt_created("task123", 3)
             assert attempt_event is not None
             assert attempt_event.event_type == EventType.ATTEMPT_CREATED.value
             assert attempt_event.task_id == "task123"
             assert attempt_event.metadata.get("attempt_number") == 3
-            
+
             comparison_event = emit_attempt_comparison("task123", True, 0.25)
             assert comparison_event is not None
             assert comparison_event.event_type == EventType.ATTEMPT_COMPARISON.value
             assert comparison_event.task_id == "task123"
             assert comparison_event.success is True  # is_improvement maps to success
             assert comparison_event.metadata.get("score_delta") == 0.25
-            
+
             local_model_event = emit_local_model_activated("remote_unavailable", task_id="task123")
             assert local_model_event is not None
             assert local_model_event.event_type == EventType.LOCAL_MODEL_ACTIVATED.value
             assert local_model_event.task_id == "task123"
             assert local_model_event.metadata.get("reason") == "remote_unavailable"
-            
+
             iteration_event = emit_agent_loop_iteration("task123", 5)
             assert iteration_event is not None
             assert iteration_event.event_type == EventType.AGENT_LOOP_ITERATION.value
             assert iteration_event.task_id == "task123"
             assert iteration_event.metadata.get("iteration") == 5
-            
+
             # Verify all events stored
             events = store.query_events()
             assert len(events) == 5

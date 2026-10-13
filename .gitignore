@@ -52,6 +52,12 @@ local_settings.py
 # Debug files
 debug_*.py
 test_*.py
+!test_security_remediation.py
+!test_mm_assurance.py
+!test_change_workflows.py
+!test_repair_workflows.py
+!test_repair_loop.py
+!app/persistence/test_execution_journal.py
 !tests/test_*.py
 
 # Coverage & reports

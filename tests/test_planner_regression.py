@@ -18,7 +18,7 @@ class MockTool(BaseTool):
         },
         "required": ["expression"],
     }
-    
+
     def execute(self, expression: str):
         return f"mock: {expression}"
 
@@ -49,7 +49,7 @@ class TestPlannerRegression(unittest.TestCase):
         """'Find the average of 10, 20 and 30.' should select calculator via fallback."""
         message = "Find the average of 10, 20 and 30."
         available_tools = [self.calculator_tool]
-        
+
         # First call (no observations) - should compute sum
         plan = self.planner.plan(message, available_tools, observations=None)
         self.assertEqual(plan.action, "use_tool")
@@ -60,11 +60,11 @@ class TestPlannerRegression(unittest.TestCase):
         """Second step of average should divide sum by count."""
         message = "Find the average of 10, 20 and 30."
         available_tools = [self.calculator_tool]
-        
+
         # Simulate first observation with sum result
         from app.core.agent_loop import ToolObservation
         obs = [ToolObservation(tool_name="calculator", result="60")]
-        
+
         plan = self.planner.plan(message, available_tools, observations=obs)
         self.assertEqual(plan.action, "use_tool")
         self.assertEqual(plan.tool_name, "calculator")
@@ -74,13 +74,13 @@ class TestPlannerRegression(unittest.TestCase):
         """Third step of average should respond with completion."""
         message = "Find the average of 10, 20 and 30."
         available_tools = [self.calculator_tool]
-        
+
         from app.core.agent_loop import ToolObservation
         obs = [
             ToolObservation(tool_name="calculator", result="60"),
             ToolObservation(tool_name="calculator", result="20"),
         ]
-        
+
         plan = self.planner.plan(message, available_tools, observations=obs)
         self.assertEqual(plan.action, "respond")
         self.assertEqual(plan.reason, "Average calculation complete.")
@@ -89,7 +89,7 @@ class TestPlannerRegression(unittest.TestCase):
         """'Calculate the average of 10, 20 and 30.' matches selection phrase 'calculate'."""
         message = "Calculate the average of 10, 20 and 30."
         available_tools = [self.calculator_tool]
-        
+
         plan = self.planner.plan(message, available_tools, observations=None)
         self.assertEqual(plan.action, "use_tool")
         self.assertEqual(plan.tool_name, "calculator")
@@ -98,7 +98,7 @@ class TestPlannerRegression(unittest.TestCase):
         """'What is the average of 10, 20 and 30?' matches 'what is'."""
         message = "What is the average of 10, 20 and 30?"
         available_tools = [self.calculator_tool]
-        
+
         plan = self.planner.plan(message, available_tools, observations=None)
         self.assertEqual(plan.action, "use_tool")
         self.assertEqual(plan.tool_name, "calculator")
@@ -107,7 +107,7 @@ class TestPlannerRegression(unittest.TestCase):
         """'Calculate 10 + 20' matches selection phrase."""
         message = "Calculate 10 + 20"
         available_tools = [self.calculator_tool]
-        
+
         plan = self.planner.plan(message, available_tools, observations=None)
         self.assertEqual(plan.action, "use_tool")
         self.assertEqual(plan.tool_name, "calculator")
@@ -116,7 +116,7 @@ class TestPlannerRegression(unittest.TestCase):
         """'What is 25 * 4?' matches 'what is'."""
         message = "What is 25 * 4?"
         available_tools = [self.calculator_tool]
-        
+
         plan = self.planner.plan(message, available_tools, observations=None)
         self.assertEqual(plan.action, "use_tool")
         self.assertEqual(plan.tool_name, "calculator")
@@ -125,7 +125,7 @@ class TestPlannerRegression(unittest.TestCase):
         """'Solve 100 / 5' matches 'solve'."""
         message = "Solve 100 / 5"
         available_tools = [self.calculator_tool]
-        
+
         plan = self.planner.plan(message, available_tools, observations=None)
         self.assertEqual(plan.action, "use_tool")
         self.assertEqual(plan.tool_name, "calculator")
@@ -134,7 +134,7 @@ class TestPlannerRegression(unittest.TestCase):
         """Non-mathematical requests should not trigger calculator fallback."""
         message = "What is the weather today?"
         available_tools = [self.calculator_tool, self.time_tool]
-        
+
         plan = self.planner.plan(message, available_tools, observations=None)
         # No "expression" in required for time tool, and no expression extracted
         self.assertEqual(plan.action, "respond")
@@ -144,10 +144,10 @@ class TestPlannerRegression(unittest.TestCase):
         """With observations but no expression, should respond."""
         message = "Find the result of 25 * 4"  # No selection phrase match
         available_tools = [self.calculator_tool]
-        
+
         from app.core.agent_loop import ToolObservation
         obs = [ToolObservation(tool_name="calculator", result="100")]
-        
+
         plan = self.planner.plan(message, available_tools, observations=obs)
         self.assertEqual(plan.action, "respond")
         self.assertEqual(plan.reason, "Expression evaluation complete.")
@@ -166,7 +166,7 @@ class TestPlannerRegression(unittest.TestCase):
         }
         message = "Find the average of 10, 20 and 30."
         available_tools = [mock_tool, self.calculator_tool]
-        
+
         plan = self.planner.plan(message, available_tools, observations=None)
         self.assertEqual(plan.tool_name, "calculator")
 
@@ -184,7 +184,7 @@ class TestPlannerRegression(unittest.TestCase):
         }
         message = "Find the average of 10, 20 and 30."
         available_tools = [mock_tool]
-        
+
         plan = self.planner.plan(message, available_tools, observations=None)
         self.assertEqual(plan.tool_name, "mock_calculator")
 
@@ -192,10 +192,10 @@ class TestPlannerRegression(unittest.TestCase):
         """Selection phrase match with observations should respond (not average)."""
         message = "Calculate 10 + 20"
         available_tools = [self.calculator_tool]
-        
+
         from app.core.agent_loop import ToolObservation
         obs = [ToolObservation(tool_name="calculator", result="30")]
-        
+
         plan = self.planner.plan(message, available_tools, observations=obs)
         self.assertEqual(plan.action, "respond")
         self.assertEqual(plan.reason, "A tool result is available for the final response.")
@@ -208,15 +208,15 @@ class TestPlannerLLMPlannerInit(unittest.TestCase):
         """LLMPlanner should accept optional fallback_gateway parameter."""
         from app.core.planner import LLMPlanner
         from app.core.router import SmartRouter
-        
+
         router = SmartRouter()
         planner = LLMPlanner(router=router, fallback_gateway=None)
         self.assertIsNone(planner.fallback_gateway)
-        
+
         class MockGateway:
             def ask(self, provider, prompt):
                 return '{"action": "respond", "tool_name": null, "arguments": {}, "reason": "test"}'
-        
+
         gateway = MockGateway()
         planner2 = LLMPlanner(router=router, fallback_gateway=gateway)
         self.assertEqual(planner2.fallback_gateway, gateway)
@@ -225,7 +225,7 @@ class TestPlannerLLMPlannerInit(unittest.TestCase):
         """LLMPlanner should work without fallback_gateway (default)."""
         from app.core.planner import LLMPlanner
         from app.core.router import SmartRouter
-        
+
         router = SmartRouter()
         planner = LLMPlanner(router=router)  # No fallback_gateway
         self.assertIsNone(planner.fallback_gateway)

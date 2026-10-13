@@ -193,7 +193,7 @@ class RepairProposal:
             )
             for c in data.get("changes", [])
         ]
-        
+
         validation_plan = [
             ValidationStep(
                 name=v["name"],
@@ -205,7 +205,7 @@ class RepairProposal:
             )
             for v in data.get("validation_plan", [])
         ]
-        
+
         observed_failure = None
         if data.get("observed_failure"):
             obs_data = data["observed_failure"]
@@ -222,7 +222,7 @@ class RepairProposal:
                 truncated=obs_data.get("truncated", False),
                 sanitized_diagnostics=obs_data.get("sanitized_diagnostics", "")
             )
-        
+
         failure_analysis = None
         if data.get("failure_analysis"):
             fa_data = data["failure_analysis"]
@@ -237,7 +237,7 @@ class RepairProposal:
                 suggested_next_step=fa_data.get("suggested_next_step"),
                 code_change_justified=fa_data.get("code_change_justified", False)
             )
-        
+
         return cls(
             proposal_id=data["proposal_id"],
             request_id=data["request_id"],
@@ -268,19 +268,19 @@ class RepairProposalGenerator:
         """Generate a repair proposal based on failure analysis."""
         # Generate a unique proposal ID
         proposal_id = str(uuid.uuid4())[:8]
-        
+
         # Determine what changes to make based on failure analysis
         changes = self._determine_changes(request)
-        
+
         # Generate rationale
         rationale = self._generate_rationale(request)
-        
+
         # Determine risk level
         risk_level = self._determine_risk_level(request, changes)
-        
+
         # Create validation plan
         validation_plan = self._create_validation_plan(request)
-        
+
         # Create the repair proposal
         proposal = RepairProposal(
             proposal_id=proposal_id,
@@ -296,42 +296,42 @@ class RepairProposalGenerator:
             expected_success_criteria=self._generate_success_criteria(request),
             rollback_strategy="standard"
         )
-        
+
         return proposal
 
     def _determine_changes(self, request: RepairProposalRequest) -> List[FileChange]:
         """Determine what file changes to make based on failure analysis."""
         changes = []
-        
+
         # If we don't have a justified code change, return empty changes
         if not request.failure_analysis.code_change_justified:
             return changes
-        
+
         # Get the likely cause and suggested next step
         likely_cause = request.failure_analysis.likely_cause or ""
         suggested_next = request.failure_analysis.suggested_next_step or ""
-        
+
         # For now, we'll create a simple placeholder change that demonstrates the mechanism
         # In a full implementation, this would involve sophisticated code analysis and generation
-        
+
         # Look at affected files and see if we can make a simple fix
         for file_path in request.target_files[:request.max_changes]:  # Limit number of files
             full_path = os.path.join(request.workspace_root, file_path)
-            
+
             # Check if file exists and is readable
             if os.path.exists(full_path) and os.path.isfile(full_path):
                 try:
                     # Read the file content
                     with open(full_path, 'r', encoding='utf-8') as f:
                         original_content = f.read()
-                    
+
                     # Bound the content size to prevent excessive processing
                     if len(original_content) > request.max_content_size * 10:  # Allow 10x for processing
                         continue  # Skip overly large files
-                    
+
                     # For demonstration purposes, we'll create a simple fix
                     # In reality, this would involve AST parsing, pattern matching, etc.
-                    
+
                     # Example: If the failure analysis suggests a syntax error like missing colon
                     if "missing colon" in likely_cause.lower() or "invalid syntax" in likely_cause.lower():
                         # Try to find common syntax issues and fix them
@@ -348,37 +348,37 @@ class RepairProposalGenerator:
                             changes.append(file_change)
                             # Only make one change for demonstration
                             break
-                    
+
                     # Example: If it's an assertion error, we might adjust the assertion
                     elif "assertion" in likely_cause.lower():
                         # For demonstration, we'll just note that we identified the issue
                         # In a real implementation, we would modify the assertion or the code it tests
                         pass
-                        
+
                 except (UnicodeDecodeError, OSError):
                     # Skip files we can't read as text
                     continue
-        
+
         return changes
 
     def _attempt_syntax_fix(self, content: str, likely_cause: str) -> str:
         """Attempt to fix common syntax issues (demonstration implementation)."""
         lines = content.split('\n')
         fixed_lines = []
-        
+
         # Simple heuristic: if we see lines that might be missing colons
         for line in lines:
             stripped = line.strip()
             # Look for common Python constructs that should end with :
-            if (stripped.startswith(('if ', 'elif ', 'else', 'for ', 'while ', 'def ', 'class ', 'try ', 'except ', 'finally ', 'with ')) 
-                and not stripped.endswith(':') 
+            if (stripped.startswith(('if ', 'elif ', 'else', 'for ', 'while ', 'def ', 'class ', 'try ', 'except ', 'finally ', 'with '))
+                and not stripped.endswith(':')
                 and not stripped.endswith('\\')  # Not a line continuation
-                and ':' not in stripped.split('#')[0] if '#' in stripped else stripped):  # Not already containing a colon in code part
+                and ':' not in (stripped.split('#')[0] if '#' in stripped else stripped)):  # Not already containing a colon in code part
                 # Add colon if it looks like it's missing
                 fixed_lines.append(line + ':')
             else:
                 fixed_lines.append(line)
-        
+
         return '\n'.join(fixed_lines)
 
     def _generate_rationale(self, request: RepairProposalRequest) -> str:
@@ -386,28 +386,28 @@ class RepairProposalGenerator:
         failure_summary = request.failure_analysis.failure_summary
         likely_cause = request.failure_analysis.likely_cause or "unspecified issue"
         confidence = request.failure_analysis.confidence_level.value
-        
+
         rationale = f"Automated repair proposal based on failure analysis. "
         rationale += f"Failure: {failure_summary}. "
         rationale += f"Likely cause: {likely_cause}. "
         rationale += f"Confidence: {confidence}. "
-        
+
         if request.failure_analysis.code_change_justified:
             rationale += "Code change is justified based on analysis."
         else:
             rationale += "No code change justified - issue may be environmental or require manual intervention."
-        
+
         return rationale
 
     def _determine_risk_level(self, request: RepairProposalRequest, changes: List[FileChange]) -> RepairRiskLevel:
         """Determine the risk level of the repair proposal."""
         if not changes:
             return RepairRiskLevel.LOW  # No changes = low risk
-        
+
         # Base risk on confidence and justification
         confidence = request.failure_analysis.confidence_level
         justified = request.failure_analysis.code_change_justified
-        
+
         if confidence == ConfidenceLevel.VERY_HIGH and justified:
             return RepairRiskLevel.LOW
         elif confidence == ConfidenceLevel.HIGH and justified:
@@ -420,12 +420,12 @@ class RepairProposalGenerator:
     def _create_validation_plan(self, request: RepairProposalRequest) -> List[ValidationStep]:
         """Create a validation plan for the repair proposal."""
         validation_steps = []
-        
+
         # Add the original validation command if it was a test
         if request.validation_result.status in [ValidationStatus.PASSED, ValidationStatus.FAILED]:
             # We would ideally extract the original command from the validation request
             # For now, we'll add a generic syntax check and the original test if we can infer it
-            
+
             # Add Python syntax check as a safe first step
             validation_steps.append(ValidationStep(
                 name="python syntax check",
@@ -434,7 +434,7 @@ class RepairProposalGenerator:
                 required=True,
                 timeout_seconds=10
             ))
-            
+
             # If we know what test failed, we could add it back
             # For demonstration, we'll add a generic test command if the original looked like a test
             if "test" in request.validation_result.stdout.lower() or "test" in request.validation_result.stderr.lower():
@@ -445,7 +445,7 @@ class RepairProposalGenerator:
                     required=True,
                     timeout_seconds=30
                 ))
-        
+
         # Always add a syntax check as a safety measure
         if not any(step.name == "python syntax check" for step in validation_steps):
             validation_steps.insert(0, ValidationStep(
@@ -455,26 +455,26 @@ class RepairProposalGenerator:
                 required=True,
                 timeout_seconds=10
             ))
-        
+
         return validation_steps
 
     def _generate_success_criteria(self, request: RepairProposalRequest) -> List[str]:
         """Generate expected success criteria for the repair."""
         criteria = []
-        
+
         # The primary success criterion is that the original validation should pass
         if request.validation_result.status == ValidationStatus.FAILED:
             criteria.append(f"Validation should pass (originally failed with status: {request.validation_result.status.value})")
         elif request.validation_result.status == ValidationStatus.PASSED:
             criteria.append("Validation should continue to pass (regression check)")
-        
+
         # Add specific criteria based on failure type
         if request.failure_analysis.likely_cause:
             criteria.append(f"Issue described in likely cause should be resolved: {request.failure_analysis.likely_cause}")
-        
+
         # Add that no new failures should be introduced
         criteria.append("No new test failures or validation errors should be introduced")
-        
+
         return criteria
 
 

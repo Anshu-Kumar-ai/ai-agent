@@ -485,7 +485,7 @@ class TestDesktopValidation:
     @pytest.mark.desktop
     def test_repeated_operations_cleanup(self):
         """Test repeated operations don't leak resources."""
-        for i in range(10):
+        for _ in range(10):
             result = self.list_tool.execute(visible_only=True)
             assert "error" not in result
             assert result["count"] >= 1
@@ -616,7 +616,7 @@ class TestDesktopValidation:
     @pytest.mark.desktop
     def test_resource_10_executions(self):
         """Run 10 sequential operations, verify cleanup."""
-        for i in range(10):
+        for _ in range(10):
             result = self.list_tool.execute(visible_only=True)
             assert "error" not in result
             assert result["count"] >= 1
@@ -632,7 +632,7 @@ class TestDesktopValidation:
     @pytest.mark.desktop
     def test_resource_50_executions(self):
         """Run 50 list operations."""
-        for i in range(50):
+        for _ in range(50):
             result = self.list_tool.execute(visible_only=True)
             assert "error" not in result
 
