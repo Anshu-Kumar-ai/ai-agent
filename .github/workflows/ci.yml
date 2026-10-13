@@ -54,7 +54,7 @@ jobs:
         MOCK_LLM_PROVIDERS: "true"
 
     - name: Upload coverage
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       if: always()
       with:
         name: coverage-${{ matrix.python-version }}
@@ -116,7 +116,7 @@ jobs:
         bandit -r app/ -f json -o bandit-report.json || true
 
     - name: Upload bandit report
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       if: always()
       with:
         name: bandit-report
@@ -128,7 +128,7 @@ jobs:
         safety check -r requirements.txt --json -o safety-report.json || true
 
     - name: Upload safety report
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       if: always()
       with:
         name: safety-report
@@ -165,7 +165,7 @@ jobs:
         twine check dist/*
 
     - name: Upload package artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: dist-package
         path: dist/*
