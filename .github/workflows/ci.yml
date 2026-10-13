@@ -28,12 +28,21 @@ jobs:
       with:
         fetch-depth: 0
 
-    - name: Debug - List files
+    - name: Debug - List files (cross-platform)
       run: |
-        pwd
-        ls -la
-        ls -la test_*.py 2>/dev/null || echo "No test_*.py files found in root"
-        ls -la app/persistence/test_execution_journal.py 2>/dev/null || echo "No app/persistence/test_execution_journal.py found"
+        python -c "
+import os, sys
+print('Working directory:', os.getcwd())
+print('Files in root:', os.listdir('.'))
+test_files = [f for f in os.listdir('.') if f.startswith('test_') and f.endswith('.py')]
+print('test_*.py files:', test_files)
+persist_test = 'app/persistence/test_execution_journal.py'
+print(f'{persist_test} exists:', os.path.exists(persist_test))
+required = ['test_security_remediation.py', 'test_mm_assurance.py', 'test_change_workflows.py', 'test_repair_workflows.py', 'test_repair_loop.py', 'app/persistence/test_execution_journal.py']
+for f in required:
+    print(f'{f} exists:', os.path.exists(f))
+"
+
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
@@ -82,15 +91,15 @@ jobs:
         python -m pip install --upgrade pip
         pip install ruff mypy
 
-    - name: Run ruff (linting) - app only
+    - name: Run ruff (linting) - app only [ADVISORY - pre-existing issues]
       run: |
         ruff check app/ --output-format=github || true
 
-    - name: Run ruff format check - app only
+    - name: Run ruff format check - app only [ADVISORY - pre-existing issues]
       run: |
         ruff format --check app/ || true
 
-    - name: Run mypy (type checking) - app only
+    - name: Run mypy (type checking) - app only [ADVISORY - pre-existing issues]
       run: |
         mypy app/ --ignore-missing-imports || true
 
@@ -113,7 +122,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install bandit safety
 
-    - name: Run bandit (SAST)
+    - name: Run bandit (SAST) [ADVISORY - pre-existing issues]
       run: |
         bandit -r app/ -f json -o bandit-report.json || true
 
@@ -125,7 +134,7 @@ jobs:
         path: bandit-report.json
         retention-days: 30
 
-    - name: Run safety (dependency vulnerabilities)
+    - name: Run safety (dependency vulnerabilities) [ADVISORY - pre-existing issues]
       run: |
         safety check -r requirements.txt --json -o safety-report.json || true
 

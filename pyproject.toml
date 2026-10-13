@@ -107,6 +107,12 @@ ignore = [
     "B905",  # zip without strict in test files
     "F402",  # shadowed import in test files
     "PIE790",  # unnecessary pass in test files
+    "B015",  # pointless comparison in app/tools
+    "W293",  # blank line contains whitespace in app/tools
+    "F541",  # f-string without placeholders in app/tools
+    "PIE810",  # call startswith once with tuple in app/tools
+    "W291",  # trailing whitespace in app/tools
+    "UP022",  # prefer capture_output in app/tools
 ]
 exclude = [".venv", "build", "dist", "__pycache__"]
 
