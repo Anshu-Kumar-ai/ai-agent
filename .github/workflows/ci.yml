@@ -30,18 +30,7 @@ jobs:
 
     - name: Debug - List files (cross-platform)
       run: |
-        python -c "
-import os, sys
-print('Working directory:', os.getcwd())
-print('Files in root:', os.listdir('.'))
-test_files = [f for f in os.listdir('.') if f.startswith('test_') and f.endswith('.py')]
-print('test_*.py files:', test_files)
-persist_test = 'app/persistence/test_execution_journal.py'
-print(f'{persist_test} exists:', os.path.exists(persist_test))
-required = ['test_security_remediation.py', 'test_mm_assurance.py', 'test_change_workflows.py', 'test_repair_workflows.py', 'test_repair_loop.py', 'app/persistence/test_execution_journal.py']
-for f in required:
-    print(f'{f} exists:', os.path.exists(f))
-"
+        python -c "import os, sys; print('Working directory:', os.getcwd()); print('Files in root:', os.listdir('.')); test_files = [f for f in os.listdir('.') if f.startswith('test_') and f.endswith('.py')]; print('test_*.py files:', test_files); persist_test = 'app/persistence/test_execution_journal.py'; print(f'{persist_test} exists:', os.path.exists(persist_test)); required = ['test_security_remediation.py', 'test_mm_assurance.py', 'test_change_workflows.py', 'test_repair_workflows.py', 'test_repair_loop.py', 'app/persistence/test_execution_journal.py']; [print(f'{f} exists:', os.path.exists(f)) for f in required]"
 
 
     - name: Set up Python ${{ matrix.python-version }}
